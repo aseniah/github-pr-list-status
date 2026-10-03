@@ -4,7 +4,7 @@ A userscript that customizes GitHub's pull request list to show more detail at a
 
 ![Pull request list with status and line count badges](docs/screenshot.png)
 
-*Sample data. [`docs/demo.html`](docs/demo.html) renders this page locally with the script's styles.*
+*Sample data. [See the live demo](https://aseniah.github.io/github-pr-list-status/demo.html), rendered with the script's styles.*
 
 ## Features
 

@@ -4,7 +4,7 @@ A userscript that customizes GitHub's pull request list to show more detail at a
 
 ![Pull request list with status and line count badges](docs/screenshot.png)
 
-*Sample data. [See the live demo](https://aseniah.github.io/github-pr-list-status/demo.html), rendered with the script's styles.*
+*Sample data. [See the live demo](https://aseniah.github.io/github-pr-list-status/demo.html), rendered with the script's styles in light and dark mode.*
 
 ## Features
 
@@ -70,7 +70,7 @@ Any browser that runs a userscript manager should work. The script uses only sta
 
 All settings live in the `CONFIG` block at the top of the script. Edit them in your userscript manager's editor. Reinstalling or updating the script replaces the file, so keep a copy of any changes you make.
 
-- `ageColors` and `approvedColor` set the row colors. Any CSS color works. The defaults are GitHub theme variables such as `var(--bgColor-success-muted)`, which adapt to light and dark mode.
+- `ageColors` and `approvedColor` set the row colors. Any CSS color works. The defaults are `var(--prb-row-green)` and similar, which switch between a light and a dark value along with GitHub's theme.
 - `namedChecks` gives specific checks their own badge. When a failing check matches a rule, the PR shows that rule's badge instead of counting the check toward **✗ N failing**. `match` is an exact check name or a regular expression, and `style` is one of `purple`, `blue`, `red`, `yellow`, `gray`, or `green`. The default rule turns a failing `Release Check` into **🔒 Pipeline**. Replace it with your own deploy gate, or leave it alone if you don't have one.
 
 ```js

@@ -2,7 +2,7 @@
 // @name        GitHub PR List Status
 // @namespace   https://github.com/aseniah
 // @description Colors PRs by age and approval, and adds merge state and line count badges to the pull requests list
-// @version     1.1
+// @version     1.1.1
 // @license     MIT
 // @updateURL   https://raw.githubusercontent.com/aseniah/github-pr-list-status/main/github-pr-list-status.user.js
 // @downloadURL https://raw.githubusercontent.com/aseniah/github-pr-list-status/main/github-pr-list-status.user.js
@@ -110,11 +110,12 @@
     .prb-review-counts svg { width: 14px; height: 14px; fill: currentColor; }
     .prb-legend { margin-top: 16px; border: 1px solid var(--borderColor-default, #d1d9e0); border-radius: 6px; font-size: 12px; color: var(--fgColor-muted, #59636e); }
     .prb-legend > summary { cursor: pointer; padding: 8px 16px; font-weight: 600; color: var(--fgColor-default, #1f2328); }
-    .prb-legend-body { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 16px 32px; padding: 4px 16px 16px; }
+    .prb-legend-body { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 16px 48px; padding: 4px 16px 16px; }
+    .prb-legend-body > div { flex: 0 1 auto; min-width: 260px; }
     .prb-legend h4 { margin: 0 0 8px; font-size: 12px; font-weight: 600; color: var(--fgColor-default, #1f2328); }
-    .prb-legend dl { display: grid; grid-template-columns: max-content 1fr; gap: 6px 12px; align-items: center; margin: 0; }
-    .prb-legend dt { display: flex; }
-    .prb-legend dd { margin: 0; }
+    .prb-legend dl { display: grid; grid-template-columns: max-content 1fr; gap: 8px 12px; align-items: start; margin: 0; }
+    .prb-legend dt { display: flex; align-items: center; min-height: 20px; }
+    .prb-legend dd { margin: 0; line-height: 20px; }
     .prb-legend-swatch { width: 32px; height: 16px; border-radius: 4px; border: 1px solid var(--borderColor-default, #d1d9e0); }
     .prb-legend .prb-review-counts { position: static; }
   `;
@@ -592,7 +593,7 @@
       ],
       [
         checkingPill(),
-        "Checks are still running, or GitHub is still working out whether the PR can merge",
+        "Checks are running, or GitHub is still checking whether it can merge",
       ],
       [
         pill("prb-blocked", "Blocked"),

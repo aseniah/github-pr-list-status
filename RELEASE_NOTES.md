@@ -1,5 +1,9 @@
 # Release Notes
 
+## 1.1.1
+
+- **Tidier legend.** Each legend column now sizes to its content, so descriptions stay on one line at full width. Badges and swatches line up with the first line of their description, keeping spacing even when text does wrap. The Checking description is also shorter.
+
 ## 1.1
 
 - **Legend.** A collapsible legend at the bottom of the pull request list explains each row color, including uncolored rows, along with every badge and review count.

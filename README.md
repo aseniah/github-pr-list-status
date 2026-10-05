@@ -26,7 +26,7 @@ Works on GitHub's global pull request list at `github.com/pulls` (Authored by me
 | ↻ Behind | The branch is behind its base and needs updating |
 | ⚠ Conflicts | The branch has merge conflicts |
 | ✗ 2 failing | Checks are failing. Hover to see which ones. |
-| ● Checking… | Checks are still running, or GitHub is still working out whether the PR can merge |
+| ● Checking… | Checks are running, or GitHub is still checking whether it can merge |
 | Blocked | Approved, but a merge requirement is still unmet |
 | 🔒 Pipeline | A deploy gate check is failing (see [Configuration](#configuration)) |
 

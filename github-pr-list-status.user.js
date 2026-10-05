@@ -2,8 +2,10 @@
 // @name        GitHub PR List Status
 // @namespace   https://github.com/aseniah
 // @description Colors PRs by age and approval, and adds merge state and line count badges to the pull requests list
-// @version     1.
+// @version     1.1
 // @license     MIT
+// @updateURL   https://raw.githubusercontent.com/aseniah/github-pr-list-status/main/github-pr-list-status.user.js
+// @downloadURL https://raw.githubusercontent.com/aseniah/github-pr-list-status/main/github-pr-list-status.user.js
 // @match       https://github.com/*
 // @run-at      document-idle
 // ==/UserScript==
@@ -106,6 +108,15 @@
     .prb-review-counts .chg { color: var(--fgColor-danger, #d1242f); }
     .prb-review-counts > span { display: inline-flex; align-items: center; gap: 3px; }
     .prb-review-counts svg { width: 14px; height: 14px; fill: currentColor; }
+    .prb-legend { margin-top: 16px; border: 1px solid var(--borderColor-default, #d1d9e0); border-radius: 6px; font-size: 12px; color: var(--fgColor-muted, #59636e); }
+    .prb-legend > summary { cursor: pointer; padding: 8px 16px; font-weight: 600; color: var(--fgColor-default, #1f2328); }
+    .prb-legend-body { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 16px 32px; padding: 4px 16px 16px; }
+    .prb-legend h4 { margin: 0 0 8px; font-size: 12px; font-weight: 600; color: var(--fgColor-default, #1f2328); }
+    .prb-legend dl { display: grid; grid-template-columns: max-content 1fr; gap: 6px 12px; align-items: center; margin: 0; }
+    .prb-legend dt { display: flex; }
+    .prb-legend dd { margin: 0; }
+    .prb-legend-swatch { width: 32px; height: 16px; border-radius: 4px; border: 1px solid var(--borderColor-default, #d1d9e0); }
+    .prb-legend .prb-review-counts { position: static; }
   `;
 
   function getColor(date) {
@@ -312,6 +323,19 @@
     return match instanceof RegExp ? match.test(name) : match === name;
   }
 
+  function checkingPill(tooltip) {
+    const checking = pill("prb-running", "● Checking", tooltip);
+    const dots = document.createElement("span");
+    dots.className = "prb-dots";
+    dots.append(
+      ...[0, 1, 2].map(() =>
+        Object.assign(document.createElement("span"), { textContent: "." }),
+      ),
+    );
+    checking.append(dots);
+    return checking;
+  }
+
   function statePills(info, approved) {
     const pills = [];
     const failing = info.checks.filter((c) =>
@@ -361,16 +385,7 @@
       const tooltip = pending.length
         ? `Pending: ${pending.map((c) => c.name).join(", ")}`
         : "GitHub is still checking whether this can merge";
-      const checking = pill("prb-running", "● Checking", tooltip);
-      const dots = document.createElement("span");
-      dots.className = "prb-dots";
-      dots.append(
-        ...[0, 1, 2].map(() =>
-          Object.assign(document.createElement("span"), { textContent: "." }),
-        ),
-      );
-      checking.append(dots);
-      pills.push(checking);
+      pills.push(checkingPill(tooltip));
     }
     if (info.mergeStateStatus === "BEHIND") {
       pills.push(
@@ -497,6 +512,143 @@
     document.head.appendChild(style);
   }
 
+  function ageRangeLabel(fromDays, toDays) {
+    const unit = (d) =>
+      d % 30 === 0
+        ? [d / 30, "month"]
+        : d % 7 === 0
+          ? [d / 7, "week"]
+          : [d, "day"];
+    const phrase = ([n, u]) => `${n} ${u}${n === 1 ? "" : "s"}`;
+    if (!fromDays) return `under ${phrase(unit(toDays))}`;
+    if (toDays === Infinity) return `over ${phrase(unit(fromDays))}`;
+    const [from, fromUnit] = unit(fromDays);
+    const [to, toUnit] = unit(toDays);
+    return fromUnit === toUnit
+      ? `${from} to ${to} ${toUnit}s`
+      : `${phrase([from, fromUnit])} to ${phrase([to, toUnit])}`;
+  }
+
+  function legendSection(heading, entries) {
+    const list = document.createElement("dl");
+    entries.forEach(([term, text]) => {
+      const dt = document.createElement("dt");
+      dt.append(term);
+      const dd = document.createElement("dd");
+      dd.textContent = text;
+      list.append(dt, dd);
+    });
+    const section = document.createElement("div");
+    section.append(
+      Object.assign(document.createElement("h4"), { textContent: heading }),
+      list,
+    );
+    return section;
+  }
+
+  function buildLegend() {
+    const swatch = (color) => {
+      const el = document.createElement("span");
+      el.className = "prb-legend-swatch";
+      el.style.background = color;
+      return el;
+    };
+    const reviewCount = (className, icon) => {
+      const counts = document.createElement("span");
+      counts.className = "prb-review-counts";
+      const count = document.createElement("span");
+      count.className = className;
+      count.append(icon, "2");
+      counts.append(count);
+      return counts;
+    };
+    const sample = sizePill({
+      linesAdded: 96,
+      linesDeleted: 12,
+      excludedLines: 0,
+    });
+    sample.removeAttribute("title");
+
+    const rowColors = [
+      [swatch(CONFIG.approvedColor), "Approved"],
+      ...CONFIG.ageColors.map((t, i) => [
+        swatch(t.color),
+        `Not approved, ${ageRangeLabel(CONFIG.ageColors[i - 1]?.days, t.days)} old`,
+      ]),
+    ];
+    const badges = [
+      [
+        pill("prb-ready", "✓ Ready"),
+        "Approved, checks passing, and up to date",
+      ],
+      [
+        pill("prb-behind", "↻ Behind"),
+        "The branch is behind its base and needs updating",
+      ],
+      [pill("prb-conflict", "⚠ Conflicts"), "The branch has merge conflicts"],
+      [
+        pill("prb-failing", "✗ 2 failing"),
+        "Checks are failing. Hover to see which ones.",
+      ],
+      [
+        checkingPill(),
+        "Checks are still running, or GitHub is still working out whether the PR can merge",
+      ],
+      [
+        pill("prb-blocked", "Blocked"),
+        "Approved, but a merge requirement is still unmet",
+      ],
+      ...CONFIG.namedChecks.map((rule) => [
+        pill(STYLE_CLASSES[rule.style] || STYLE_CLASSES.gray, rule.label),
+        rule.match instanceof RegExp
+          ? `A check matching ${rule.match} is failing`
+          : `${rule.match} is failing`,
+      ]),
+      [
+        sample,
+        CONFIG.excludeLockfiles
+          ? "Lines added and deleted, not counting lockfiles"
+          : "Lines added and deleted",
+      ],
+    ];
+    const reviews = [
+      [reviewCount("ok", "✓"), "People who approved"],
+      [reviewCount("chg", "✗"), "People who requested changes"],
+      [
+        reviewCount("cmt", discussionIcon()),
+        "People who commented without deciding",
+      ],
+    ];
+
+    const legend = document.createElement("details");
+    legend.id = "prb-legend";
+    legend.className = "prb-legend";
+    const body = document.createElement("div");
+    body.className = "prb-legend-body";
+    body.append(
+      legendSection("Row colors", rowColors),
+      legendSection("Badges", badges),
+      legendSection("Reviews", reviews),
+    );
+    legend.append(
+      Object.assign(document.createElement("summary"), {
+        textContent: "Legend",
+      }),
+      body,
+    );
+    return legend;
+  }
+
+  function addLegend() {
+    const list = document
+      .querySelector('[data-testid="timestamp-container"]')
+      ?.closest("ul")?.parentElement;
+    if (!list || list.nextElementSibling?.id === "prb-legend") return;
+    document.getElementById("prb-legend")?.remove();
+    ensureStyles();
+    list.after(buildLegend());
+  }
+
   function addBadges(row) {
     const link = row.querySelector('a[data-testid="listitem-title-link"]');
     const titleContainer = link?.closest("h3")?.parentElement;
@@ -586,6 +738,7 @@
         applyHighlight(row, timeEl);
         addBadges(row);
       });
+    addLegend();
   }
 
   let highlightQueued = false;

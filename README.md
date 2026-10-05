@@ -16,6 +16,7 @@ Works on GitHub's global pull request list at `github.com/pulls` (Authored by me
 - **Row colors by age and approval.** Approved PRs are green. Unapproved PRs turn yellow after a week, orange after two weeks, and red after a month.
 - **Live while checks run.** PRs showing **● Checking…** refresh themselves once a minute until their checks finish or GitHub settles their merge state.
 - **Deploy gates.** A failing check you name, such as a release lock, gets its own badge instead of counting as a failure. See [Configuration](#configuration).
+- **Built-in legend.** A collapsible legend at the bottom of the list explains each row color, badge, and review count.
 - **Light and dark mode.** Colors come from GitHub's own theme.
 - **No token or setup.** It uses your existing GitHub login and only ever shows PRs you already have access to.
 
@@ -28,6 +29,10 @@ Works on GitHub's global pull request list at `github.com/pulls` (Authored by me
 | ● Checking… | Checks are still running, or GitHub is still working out whether the PR can merge |
 | Blocked | Approved, but a merge requirement is still unmet |
 | 🔒 Pipeline | A deploy gate check is failing (see [Configuration](#configuration)) |
+
+The same key is available on the page itself. Expand **Legend** below the list to see it.
+
+![Legend explaining row colors, badges, and review counts](docs/legend.png)
 
 ## How it works
 
@@ -66,11 +71,24 @@ You can also download the `.user.js` file and save it into the folder Userscript
 
 Any browser that runs a userscript manager should work. The script uses only standard browser APIs and no manager-specific functions. If your manager can't install from a link, create a new script and paste in the contents of `github-pr-list-status.user.js`.
 
+## Updates
+
+The script updates itself. Each release raises the `@version` in its header, and your userscript manager checks the install link above for a newer version and installs it.
+
+| Manager | How updates arrive | How to turn them off |
+|---|---|---|
+| Userscripts (Safari) | Checked periodically. Updates are listed in the extension's popup, and you can also update from the script's editor. | Delete the `@updateURL` and `@downloadURL` lines from the script. |
+| Tampermonkey | Checked automatically on a schedule. To check now, use **Check for userscript updates** in the extension's menu. | In the dashboard, open the script, go to its **Settings** tab, and uncheck **Check for updates**. |
+| Violentmonkey | Checked automatically once a day. To check now, click the update icon next to the script in the dashboard. | In the dashboard, open the script's settings, turn off **Allow update**, and save. |
+| Greasemonkey | Checked automatically. | Open the script from the Greasemonkey menu and set **Automatic Updates** to **Off**. |
+
+In Tampermonkey, Violentmonkey, and Greasemonkey, deleting the header lines doesn't stop updates, because they fall back to the link you installed from. Use the setting instead.
+
 ## Configuration
 
-All settings live in the `CONFIG` block at the top of the script. Edit them in your userscript manager's editor. Reinstalling or updating the script replaces the file, so keep a copy of any changes you make.
+All settings live in the `CONFIG` block at the top of the script. Edit them in your userscript manager's editor. An update replaces the whole file and your changes with it, so [turn off updates](#updates) for the script before editing, and keep a copy of your changes.
 
-- `ageColors` and `approvedColor` set the row colors. Any CSS color works. The defaults are `var(--prb-row-green)` and similar, which switch between a light and a dark value along with GitHub's theme.
+- `ageColors` and `approvedColor` set the row colors. Any CSS color works. The defaults are `var(--prb-row-green)` and similar, which switch between a light and a dark value along with GitHub's theme. The legend lists whatever thresholds and colors you set here, along with your `namedChecks` badges.
 - `namedChecks` gives specific checks their own badge. When a failing check matches a rule, the PR shows that rule's badge instead of counting the check toward **✗ N failing**. `match` is an exact check name or a regular expression, and `style` is one of `purple`, `blue`, `red`, `yellow`, `gray`, or `green`. The default rule turns a failing `Release Check` into **🔒 Pipeline**. Replace it with your own deploy gate, or leave it alone if you don't have one.
 
 ```js

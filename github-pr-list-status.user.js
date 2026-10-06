@@ -2,7 +2,7 @@
 // @name        GitHub PR List Status
 // @namespace   https://github.com/aseniah
 // @description Colors PRs by age and approval, and adds merge state and line count badges to the pull requests list
-// @version     1.2
+// @version     1.3
 // @license     MIT
 // @updateURL   https://raw.githubusercontent.com/aseniah/github-pr-list-status/main/github-pr-list-status.user.js
 // @downloadURL https://raw.githubusercontent.com/aseniah/github-pr-list-status/main/github-pr-list-status.user.js
@@ -36,7 +36,11 @@
     lockfilePattern:
       /(^|\/)(package-lock\.json|npm-shrinkwrap\.json|yarn\.lock|pnpm-lock\.yaml|bun\.lockb?|Gemfile\.lock|Cargo\.lock|composer\.lock|poetry\.lock|Pipfile\.lock|uv\.lock|go\.sum|flake\.lock)$/,
 
-    // Reloading the page within this window reuses earlier results.
+    // On PRs you opened, count unresolved threads waiting on your reply or reaction.
+    // Adds one request for each of your PRs that has comments.
+    flagWaitingThreads: true,
+
+    // Moving between lists without reloading reuses results this recent. Reloading always fetches fresh data.
     cacheMinutes: 1,
     // While the tab is visible, PRs showing "Checking…" refetch this often. Other badges update on reload.
     checkingRefreshSeconds: 60,
@@ -75,6 +79,10 @@
   // Primer octicon eye-16 (MIT).
   const EYE_ICON_PATH =
     "M8 2c1.981 0 3.671.992 4.933 2.078 1.27 1.091 2.187 2.345 2.637 3.023a1.62 1.62 0 0 1 0 1.798c-.45.678-1.367 1.932-2.637 3.023C11.67 13.008 9.981 14 8 14c-1.981 0-3.671-.992-4.933-2.078C1.797 10.83.88 9.576.43 8.898a1.62 1.62 0 0 1 0-1.798c.45-.677 1.367-1.931 2.637-3.022C4.33 2.992 6.019 2 8 2ZM1.679 7.932a.12.12 0 0 0 0 .136c.411.622 1.241 1.75 2.366 2.717C5.176 11.758 6.527 12.5 8 12.5c1.473 0 2.825-.742 3.955-1.715 1.124-.967 1.954-2.096 2.366-2.717a.12.12 0 0 0 0-.136c-.412-.621-1.242-1.75-2.366-2.717C10.824 4.242 9.473 3.5 8 3.5c-1.473 0-2.825.742-3.955 1.715-1.124.967-1.954 2.096-2.366 2.717ZM8 10a2 2 0 1 1-.001-3.999A2 2 0 0 1 8 10Z";
+
+  // Primer octicon reply-16 (MIT).
+  const REPLY_ICON_PATH =
+    "M6.78 1.97a.75.75 0 0 1 0 1.06L3.81 6h6.44A4.75 4.75 0 0 1 15 10.75v2.5a.75.75 0 0 1-1.5 0v-2.5a3.25 3.25 0 0 0-3.25-3.25H3.81l2.97 2.97a.749.749 0 0 1-.326 1.275.749.749 0 0 1-.734-.215L.47 7.28a.75.75 0 0 1 0-1.06l4.25-4.25a.75.75 0 0 1 1.06 0Z";
 
   const BADGE_CSS = `
     :root { --prb-row-yellow: #fff8c5; --prb-row-orange: #ffd8b1; --prb-row-red: #ffd0d0; --prb-row-green: #c8f5c8; }
@@ -115,6 +123,16 @@
     .prb-review-counts .rereq svg { width: 16px; height: 16px; }
     .prb-review-counts .rereq circle { fill: var(--bgColor-accent-emphasis, #0969da); }
     .prb-review-counts .rereq path { fill: var(--fgColor-onEmphasis, #fff); }
+    .prb-review-counts .waiting { color: var(--fgColor-accent, #0969da); font-weight: 600; }
+    .prb-review-counts .waiting svg { width: 16px; height: 16px; }
+    .prb-review-counts .waiting circle { fill: var(--bgColor-accent-emphasis, #0969da); }
+    .prb-review-counts .waiting path { fill: var(--fgColor-onEmphasis, #fff); }
+    .prb-error { color: var(--fgColor-muted, #59636e); font-size: 14px; line-height: 18px; cursor: help; }
+    .prb-status { margin-top: 8px; text-align: right; font-size: 12px; color: var(--fgColor-attention, #9a6700); }
+    .prb-status:empty { display: none; }
+    .prb-status > span { cursor: help; }
+    .prb-status button { margin-left: 4px; padding: 0; border: 0; background: none; font: inherit; color: var(--fgColor-accent, #0969da); cursor: pointer; }
+    .prb-status button:hover { text-decoration: underline; }
     .prb-legend { margin-top: 16px; border: 1px solid var(--borderColor-default, #d1d9e0); border-radius: 6px; font-size: 12px; color: var(--fgColor-muted, #59636e); }
     .prb-legend > summary { cursor: pointer; padding: 8px 16px; font-weight: 600; color: var(--fgColor-default, #1f2328); }
     .prb-legend-body { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 16px 48px; padding: 4px 16px 16px; }
@@ -163,8 +181,11 @@
   }
 
   const memoryCache = new Map();
+  const threadsCache = new Map();
   const queue = [];
   let activeCount = 0;
+  // Set by any 429. Nothing else is requested until the user retries or reloads.
+  let rateLimited = false;
 
   function schedule(task) {
     return new Promise((resolve, reject) => {
@@ -174,6 +195,14 @@
   }
 
   function pumpQueue() {
+    if (rateLimited) {
+      queue
+        .splice(0)
+        .forEach(({ reject }) =>
+          reject(Object.assign(new Error("skipped"), { skipped: true })),
+        );
+      return;
+    }
     while (activeCount < CONFIG.maxConcurrentPrs && queue.length) {
       const { task, resolve, reject } = queue.shift();
       activeCount++;
@@ -191,6 +220,12 @@
       headers: PAGE_DATA_HEADERS,
       credentials: "same-origin",
     });
+    if (response.status === 429) {
+      rateLimited = true;
+      throw Object.assign(new Error(`${endpoint} returned 429`), {
+        rateLimited: true,
+      });
+    }
     if (!response.ok)
       throw new Error(`${endpoint} returned ${response.status}`);
     return response.json();
@@ -229,7 +264,10 @@
         "merge_box?merge_method=MERGE&bypass_requirements=false",
       ),
       fetchPageData(prPath, "status_checks"),
-      fetchPageData(prPath, "participants").catch(() => ({ participants: [] })),
+      fetchPageData(prPath, "participants").catch((error) => {
+        if (error.rateLimited) throw error;
+        return { participants: [] };
+      }),
     ]);
     const reviews = mergeBox.pullRequest.latestOpinionatedReviews || [];
     const reviewersWithState = (state) =>
@@ -245,6 +283,7 @@
         .map((r) => r.reviewer?.login)
         .filter(Boolean),
       mergeStateStatus: mergeBox.pullRequest.mergeStateStatus,
+      state: mergeBox.pullRequest.state,
       checks: (checks.statusChecks || []).map((c) => ({
         name: c.displayName,
         state: c.state,
@@ -253,37 +292,48 @@
     };
   }
 
-  function getPrInfo(prPath, { fresh = false } = {}) {
-    if (!fresh && memoryCache.has(prPath)) return memoryCache.get(prPath);
-
-    const storageKey = `prb3:${CONFIG.excludeLockfiles ? "nolock" : "all"}:${prPath}`;
-    try {
-      const stored = !fresh && JSON.parse(sessionStorage.getItem(storageKey));
-      if (stored && Date.now() - stored.at < CACHE_TTL_MS) {
-        const cached = Promise.resolve(stored.info);
-        memoryCache.set(prPath, cached);
-        return cached;
-      }
-    } catch (_) {
-      /* unreadable cache entry, refetch */
-    }
-
-    const pending = schedule(() => loadPrInfo(prPath)).then((info) => {
-      try {
-        if (!isUnresolved(info))
-          sessionStorage.setItem(
-            storageKey,
-            JSON.stringify({ at: Date.now(), info }),
-          );
-      } catch (_) {
-        /* storage full or blocked */
-      }
-      setTimeout(() => memoryCache.delete(prPath), CACHE_TTL_MS);
-      return info;
+  // Ages are checked on read because the back-forward cache freezes timers along with the page.
+  function cachedLoad(cache, prPath, load, fresh) {
+    const entry = cache.get(prPath);
+    if (!fresh && entry && Date.now() - entry.at < CACHE_TTL_MS)
+      return entry.pending;
+    const pending = schedule(load);
+    pending.catch(() => {
+      if (cache.get(prPath)?.pending === pending) cache.delete(prPath);
     });
-    pending.catch(() => memoryCache.delete(prPath));
-    memoryCache.set(prPath, pending);
+    cache.set(prPath, { pending, at: Date.now() });
     return pending;
+  }
+
+  function getPrInfo(prPath, { fresh = false } = {}) {
+    return cachedLoad(memoryCache, prPath, () => loadPrInfo(prPath), fresh);
+  }
+
+  // A thread waits on the viewer when it's unresolved and the viewer neither wrote nor reacted to
+  // its last comment. The endpoint returns at most 20 comments per thread, so longer threads count.
+  function waitingThreads(threads) {
+    const open = threads.filter((t) => !t.isResolved);
+    const unchecked = open.filter((t) => t.reviewCommentsLimitExceeded).length;
+    const waiting = open.filter((t) => {
+      if (t.reviewCommentsLimitExceeded) return true;
+      const last = t.commentsData?.comments?.at(-1);
+      return (
+        last &&
+        !last.viewerDidAuthor &&
+        !last.reactionGroups?.some((g) => g.reaction?.viewerHasReacted)
+      );
+    }).length;
+    return { waiting, unchecked };
+  }
+
+  function getWaitingThreads(prPath, { fresh = false } = {}) {
+    return cachedLoad(
+      threadsCache,
+      prPath,
+      async () =>
+        waitingThreads((await fetchPageData(prPath, "threads")).threads || []),
+      fresh,
+    );
   }
 
   function formatCount(n) {
@@ -320,7 +370,15 @@
 
   // GitHub reports UNKNOWN while it recomputes mergeability, e.g. right after the base branch moves.
   function isUnresolved(info) {
-    return info.mergeStateStatus === "UNKNOWN" || info.checks.some(isPending);
+    return (
+      isOpen(info) &&
+      (info.mergeStateStatus === "UNKNOWN" || info.checks.some(isPending))
+    );
+  }
+
+  // Merged and closed PRs report UNKNOWN merge state indefinitely.
+  function isOpen(info) {
+    return !info.state || info.state === "OPEN";
   }
 
   function isPending(check) {
@@ -348,6 +406,7 @@
   }
 
   function statePills(info, approved) {
+    if (!isOpen(info)) return [];
     const pills = [];
     const failing = info.checks.filter((c) =>
       FAILING_CHECK_STATES.has(c.state),
@@ -464,9 +523,22 @@
     ].filter((part) => part.people.length);
   }
 
+  function viewerLogin() {
+    return document.querySelector('meta[name="user-login"]')?.content;
+  }
+
+  // GitHub's comment count includes review thread comments and is left out when it's zero.
+  function wantsWaitingThreads(row) {
+    return (
+      CONFIG.flagWaitingThreads &&
+      prAuthor(row) === viewerLogin() &&
+      !!row.querySelector("svg.octicon-comment")
+    );
+  }
+
   // Submitting a review clears the reviewer's request, so a reviewer who is pending again was re-requested.
   function isReRequested(info) {
-    const viewer = document.querySelector('meta[name="user-login"]')?.content;
+    const viewer = viewerLogin();
     if (!viewer || !info.pendingReviewers.includes(viewer)) return false;
     return [
       ...info.participants,
@@ -475,7 +547,7 @@
     ].includes(viewer);
   }
 
-  function reRequestIcon() {
+  function discIcon(iconPath, transform) {
     const ns = "http://www.w3.org/2000/svg";
     const svg = document.createElementNS(ns, "svg");
     svg.setAttribute("viewBox", "0 0 16 16");
@@ -485,13 +557,35 @@
     circle.setAttribute("cy", "8");
     circle.setAttribute("r", "8");
     const path = document.createElementNS(ns, "path");
-    path.setAttribute("d", EYE_ICON_PATH);
-    path.setAttribute("transform", "translate(3 3) scale(0.625)");
+    path.setAttribute("d", iconPath);
+    path.setAttribute("transform", transform);
     svg.append(circle, path);
+    return svg;
+  }
+
+  function reRequestIcon() {
     const el = document.createElement("span");
     el.className = "rereq";
-    el.append(svg);
+    el.append(discIcon(EYE_ICON_PATH, "translate(3 3) scale(0.625)"));
     return el;
+  }
+
+  function waitingBadge(waiting) {
+    const el = document.createElement("span");
+    el.className = "waiting";
+    el.append(
+      discIcon(REPLY_ICON_PATH, "translate(3.2 3) scale(0.625)"),
+      String(waiting),
+    );
+    return el;
+  }
+
+  function waitingTooltip({ waiting, unchecked }) {
+    const threads = waiting === 1 ? "thread is" : "threads are";
+    const note = unchecked
+      ? ` (${unchecked} too long to check, counted to be safe)`
+      : "";
+    return `${waiting} unresolved ${threads} waiting on your reply or reaction${note}`;
   }
 
   function discussionIcon() {
@@ -521,22 +615,25 @@
     return slot;
   }
 
-  function renderReviews(row, info) {
+  function renderReviews(row, info, threads) {
     const slot = reviewSlot(row);
     if (!slot) return;
     const parts = reviewSummary(info, row);
     const reRequested = isReRequested(info);
-    if (!parts.length && !reRequested) {
+    const waiting = threads?.waiting > 0;
+    if (!parts.length && !reRequested && !waiting) {
       slot.replaceChildren();
       return;
     }
     const el = document.createElement("span");
     el.className = "prb-review-counts";
     el.title = [
+      ...(waiting ? [waitingTooltip(threads)] : []),
       ...(reRequested ? ["Your review was re-requested"] : []),
       ...parts.map((part) => `${part.label}: ${part.people.join(", ")}`),
     ].join("\n");
     slot.replaceChildren(el);
+    if (waiting) el.append(waitingBadge(threads.waiting));
     if (reRequested) el.append(reRequestIcon());
     el.append(
       ...parts.map((part) => {
@@ -654,12 +751,27 @@
           ? "Lines added and deleted, not counting lockfiles"
           : "Lines added and deleted",
       ],
+      [errorMark(), "Some details didn't load. Hover for why."],
     ];
-    const reRequestSample = document.createElement("span");
-    reRequestSample.className = "prb-review-counts";
-    reRequestSample.append(reRequestIcon());
+    const reviewSample = (icon) => {
+      const counts = document.createElement("span");
+      counts.className = "prb-review-counts";
+      counts.append(icon);
+      return counts;
+    };
     const reviews = [
-      [reRequestSample, "You reviewed and were asked to review again"],
+      ...(CONFIG.flagWaitingThreads
+        ? [
+            [
+              reviewSample(waitingBadge(2)),
+              "Threads awaiting your reply or reaction",
+            ],
+          ]
+        : []),
+      [
+        reviewSample(reRequestIcon()),
+        "You reviewed and were asked to review again",
+      ],
       [reviewCount("ok", "✓"), "People who approved"],
       [reviewCount("chg", "✗"), "People who requested changes"],
       [
@@ -691,10 +803,61 @@
     const list = document
       .querySelector('[data-testid="timestamp-container"]')
       ?.closest("ul")?.parentElement;
-    if (!list || list.nextElementSibling?.id === "prb-legend") return;
-    document.getElementById("prb-legend")?.remove();
+    if (!list || list.nextElementSibling?.id === "prb-footer") return;
+    document.getElementById("prb-footer")?.remove();
     ensureStyles();
-    list.after(buildLegend());
+    const footer = document.createElement("div");
+    footer.id = "prb-footer";
+    const status = document.createElement("div");
+    status.id = "prb-status";
+    status.className = "prb-status";
+    footer.append(status, buildLegend());
+    list.after(footer);
+    updateStatus();
+  }
+
+  function errorMark(reason) {
+    const el = document.createElement("span");
+    el.className = "prb-error";
+    el.textContent = "⚠";
+    if (reason)
+      el.title = `PR List Status couldn't load all of this PR's details. ${reason}.`;
+    return el;
+  }
+
+  function failureReason(error) {
+    if (error.skipped)
+      return "Skipped after GitHub rate limited an earlier request";
+    if (error.rateLimited) return "GitHub rate limited this request";
+    return `The request failed (${error.message})`;
+  }
+
+  function updateStatus() {
+    const status = document.getElementById("prb-status");
+    if (!status) return;
+    const failed = [...document.querySelectorAll(".prb-group[data-failed]")];
+    if (!failed.length) {
+      status.replaceChildren();
+      return;
+    }
+    const summary = document.createElement("span");
+    const prs = failed.length === 1 ? "1 PR" : `${failed.length} PRs`;
+    const cause = rateLimited ? " because GitHub rate limited requests" : "";
+    summary.textContent = `⚠ PR List Status: ${prs} didn't fully load${cause} ·`;
+    summary.title = failed
+      .map(
+        (group) =>
+          `${group.dataset.prPath.slice(1).replace("/pull/", "#")}: ${group.dataset.failed}`,
+      )
+      .join("\n");
+    const retry = document.createElement("button");
+    retry.type = "button";
+    retry.textContent = "Retry";
+    retry.addEventListener("click", () => {
+      rateLimited = false;
+      failed.forEach((group) => refreshRow(group, { spinner: true }));
+    });
+    status.replaceChildren(summary, retry);
   }
 
   function addBadges(row) {
@@ -708,7 +871,7 @@
     if (existing?.dataset.prPath === prPath) {
       // GitHub can redraw the right-hand column on its own, which drops the review counts.
       if (existing.prbInfo && !row.querySelector(".prb-reviews"))
-        renderReviews(row, existing.prbInfo);
+        renderReviews(row, existing.prbInfo, existing.prbThreads);
       return;
     }
     existing?.remove();
@@ -718,6 +881,13 @@
     const group = document.createElement("span");
     group.className = "prb-group";
     group.dataset.prPath = prPath;
+    showLoading(group);
+    // Floated, so it has to come before the h3 to sit on the title's first line.
+    titleContainer.prepend(group);
+    loadRow(group, row, {});
+  }
+
+  function showLoading(group) {
     const loading = pill(
       "prb-loading",
       "",
@@ -726,25 +896,57 @@
     const spinner = document.createElement("span");
     spinner.className = "prb-spinner";
     loading.appendChild(spinner);
-    group.appendChild(loading);
-    // Floated, so it has to come before the h3 to sit on the title's first line.
-    titleContainer.prepend(group);
+    group.replaceChildren(loading);
+  }
 
-    getPrInfo(prPath).then(
-      (info) => renderBadges(group, row, info),
-      () => group.remove(),
+  // Threads load after the main badges so they never hold up a row.
+  function loadRow(group, row, { fresh = false, threads = true }) {
+    const prPath = group.dataset.prPath;
+    return getPrInfo(prPath, { fresh }).then(
+      (info) => {
+        renderBadges(group, row, info);
+        if (!threads || !isOpen(info) || !wantsWaitingThreads(row)) return;
+        getWaitingThreads(prPath, { fresh }).then(
+          (result) => {
+            group.prbThreads = result;
+            renderReviews(row, info, result);
+          },
+          (error) => showFailure(group, error),
+        );
+      },
+      (error) => showFailure(group, error),
     );
   }
 
   function renderBadges(group, row, info) {
     group.replaceChildren(...statePills(info, isApproved(row)), sizePill(info));
     group.prbInfo = info;
-    renderReviews(row, info);
+    renderReviews(row, info, group.prbThreads);
     group.dataset.checking = isUnresolved(info) ? "true" : "false";
+    if (group.dataset.failed) {
+      delete group.dataset.failed;
+      updateStatus();
+    }
+  }
+
+  function showFailure(group, error) {
+    group.dataset.failed = failureReason(error);
+    group.querySelector(".prb-error")?.remove();
+    if (!group.prbInfo) group.replaceChildren();
+    group.prepend(errorMark(group.dataset.failed));
+    updateStatus();
+  }
+
+  function refreshRow(group, { spinner = false, threads = true } = {}) {
+    const row = group.closest("li");
+    if (!row) return;
+    if (spinner && !group.prbInfo) showLoading(group);
+    loadRow(group, row, { fresh: true, threads });
   }
 
   function refreshCheckingRows() {
     if (document.visibilityState !== "visible" || !isPrListPage()) return;
+    if (rateLimited) return;
     // Current badges stay up until fresh data replaces them, and stay put if a refetch fails.
     document
       .querySelectorAll('.prb-group[data-checking="true"]')
@@ -752,10 +954,33 @@
         const row = group.closest("li");
         getPrInfo(group.dataset.prPath, { fresh: true }).then(
           (info) => renderBadges(group, row, info),
-          () => {},
+          (error) => {
+            if (error.rateLimited || error.skipped) showFailure(group, error);
+          },
         );
       });
   }
+
+  // Opening a PR from the list is a full page load, and Back can restore the frozen list from the
+  // browser's back-forward cache without rerunning anything, so refresh the PRs opened from here.
+  const openedPrs = new Set();
+  document.addEventListener(
+    "click",
+    (event) => {
+      const link = event.target.closest?.(
+        'a[data-testid="listitem-title-link"]',
+      );
+      if (link) openedPrs.add(new URL(link.href).pathname);
+    },
+    true,
+  );
+  window.addEventListener("pageshow", (event) => {
+    if (!event.persisted || !isPrListPage() || rateLimited) return;
+    document.querySelectorAll(".prb-group").forEach((group) => {
+      if (openedPrs.has(group.dataset.prPath)) refreshRow(group);
+    });
+    openedPrs.clear();
+  });
 
   // Runs on all of github.com because GitHub navigates between pages without a full reload.
   function isPrListPage() {

@@ -1,5 +1,18 @@
 # Release Notes
 
+## 1.3
+
+### Features
+
+- **Threads waiting on you.** On PRs you opened, a blue reply icon with a count marks unresolved review threads where someone else had the last word and you haven't replied or reacted. Resolving the thread, replying, or reacting to its latest comment clears it. Turn it off with `flagWaitingThreads`.
+- **Load failures are visible.** A row that didn't fully load shows a ⚠ with the reason on hover, and a line under the list counts those rows with a Retry button. A rate limit from GitHub stops all requests until you retry or reload.
+
+### Fixes
+
+- **Fresh data on reload.** Reloading the page now always fetches fresh badges instead of reusing results from the last minute.
+- **Fresh data after Back.** Opening a PR from the list and returning with the Back button refetches that PR.
+- **Merged and closed PRs.** These rows now show only line and review counts. They no longer get stuck on **● Checking…** or refetch every minute.
+
 ## 1.2
 
 - **Re-review requests.** When you've reviewed or commented on a PR and the author asks for your review again, a blue eye appears at the start of its review counts. Hover for details. The legend explains it too.

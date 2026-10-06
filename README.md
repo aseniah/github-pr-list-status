@@ -14,6 +14,7 @@ Works on GitHub's global pull request list at `github.com/pulls` (Authored by me
 - **Diff size.** A `+177 −80` badge shows lines added and deleted. Lockfiles are left out by default so dependency upgrades show the size you'd actually review. Hover for exact numbers and how many lockfile lines were skipped.
 - **Who has weighed in.** Under GitHub's comment count, `✓2` counts approvals, `✗1` counts change requests, and a discussion icon counts people who commented without deciding, such as someone asking a question. Hover for names. Pending reviewers who haven't interacted, the PR author, and bots aren't counted.
 - **Re-review requests.** A blue eye at the start of the review counts marks PRs you already reviewed or commented on where the author has asked for your review again, so you know to come back and look at their changes.
+- **Threads waiting on you.** On PRs you opened, a blue reply icon with a count marks unresolved review threads where someone else had the last word and you haven't replied or reacted. Resolve the thread, reply, or react to its latest comment with any emoji to clear it. Hover for details.
 - **Row colors by age and approval.** Approved PRs are green. Unapproved PRs turn yellow after a week, orange after two weeks, and red after a month.
 - **Live while checks run.** PRs showing **● Checking…** refresh themselves once a minute until their checks finish or GitHub settles their merge state.
 - **Deploy gates.** A failing check you name, such as a release lock, gets its own badge instead of counting as a failure. See [Configuration](#configuration).
@@ -39,9 +40,12 @@ The same key is available on the page itself. Expand **Legend** below the list t
 
 The list page doesn't include these details, so the script fetches them from the same endpoints GitHub's own pull request page uses. Requests go to `github.com` with your existing login.
 
-Badges load once when the list appears, and reloading the page fetches fresh data. Results are cached for a minute per browser tab so moving between lists doesn't refetch everything, and at most four PRs load at a time. The one exception is **● Checking…**: while the tab is visible, those PRs refetch once a minute until their checks finish or GitHub settles their merge state.
+Badges load once when the list appears, and reloading the page always fetches fresh data. Moving between lists without a reload reuses results from the last minute, and at most four PRs load at a time. Waiting thread counts load after the main badges, and only for your own PRs that have comments. Two things refresh on their own:
 
-These endpoints are undocumented and can change without notice. If a request fails, that row's badges are simply left off and the rest of the page works normally.
+- **● Checking…** PRs refetch once a minute while the tab is visible, until their checks finish or GitHub settles their merge state.
+- When you open a PR from the list and come back with the browser's Back button, that PR refetches, so changes you just made show up.
+
+These endpoints are undocumented and can change without notice. If a request fails, the row shows a ⚠ you can hover for the reason, and a line under the list counts the PRs that didn't fully load, with a **Retry** button that refetches just those PRs. If GitHub rate limits a request, the script stops making requests until you retry or reload.
 
 ## Installation
 
@@ -101,7 +105,8 @@ namedChecks: [
 
 - `ignoredReviewers` leaves accounts out of the review counts. Each entry is an exact login or a regular expression. The defaults skip `[bot]` accounts and Copilot.
 - `excludeLockfiles` leaves lockfiles out of the line counts and is on by default. `lockfilePattern` is the regular expression that decides what counts as a lockfile. It covers npm, Yarn, pnpm, Bun, Bundler, Cargo, Composer, Poetry, Pipenv, uv, Go, and Nix.
-- `cacheMinutes` and `maxConcurrentPrs` control caching and how many PRs load at once.
+- `flagWaitingThreads` turns the waiting threads count on or off. It's on by default and costs one extra request for each of your PRs that has comments.
+- `cacheMinutes` sets how long results are reused when you move between lists without reloading. Reloading always fetches fresh data. `maxConcurrentPrs` sets how many PRs load at once.
 - `checkingRefreshSeconds` sets how often PRs with running checks refetch while the tab is visible. Set it to `0` to turn this off.
 
 ## Limitations

@@ -1,5 +1,9 @@
 # Release Notes
 
+## 1.2
+
+- **Re-review requests.** When you've reviewed or commented on a PR and the author asks for your review again, a blue eye appears at the start of its review counts. Hover for details. The legend explains it too.
+
 ## 1.1.1
 
 - **Tidier legend.** Each legend column now sizes to its content, so descriptions stay on one line at full width. Badges and swatches line up with the first line of their description, keeping spacing even when text does wrap. The Checking description is also shorter.

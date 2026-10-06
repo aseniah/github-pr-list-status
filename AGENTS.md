@@ -6,8 +6,8 @@ A single-file userscript, `github-pr-list-status.user.js`, that adds merge state
 
 The script runs on GitHub internals that are undocumented and change without notice, so any GitHub release can break it. Treat every name below as a snapshot: before changing behavior that touches one, probe the live page or response and confirm it still holds. Every failure path degrades to a row without badges, never to a broken page.
 
-- **Endpoints**, all under `/{owner}/{repo}/pull/{n}/page_data/`: `diffstat`, `file_tree`, `merge_box?merge_method=MERGE&bypass_requirements=false`, `status_checks`, `participants`. They answer 406 without `X-Requested-With: XMLHttpRequest`. `file_tree` omits count fields that are zero. `merge_box` reports `mergeStateStatus: UNKNOWN` while GitHub recomputes mergeability, typically right after the base branch moves.
-- **Page structure**: rows are found through `[data-testid="timestamp-container"]`, titles through `a[data-testid="listitem-title-link"]`, the author through the `aria-label` of `[data-testid="author-filter-link"]`, and row regions through the CSS grid areas `primary`, `main-content`, and `metadata`. Theme comes from `data-color-mode` on `<html>`.
+- **Endpoints**, all under `/{owner}/{repo}/pull/{n}/page_data/`: `diffstat`, `file_tree`, `merge_box?merge_method=MERGE&bypass_requirements=false`, `status_checks`, `participants`. They answer 406 without `X-Requested-With: XMLHttpRequest`. `file_tree` omits count fields that are zero. `merge_box` reports `mergeStateStatus: UNKNOWN` while GitHub recomputes mergeability, typically right after the base branch moves. `merge_box` also lists `pendingReviewRequests`, and a reviewer leaves that list when they submit a review.
+- **Page structure**: rows are found through `[data-testid="timestamp-container"]`, titles through `a[data-testid="listitem-title-link"]`, the author through the `aria-label` of `[data-testid="author-filter-link"]`, and row regions through the CSS grid areas `primary`, `main-content`, and `metadata`. Theme comes from `data-color-mode` on `<html>`, and the signed-in user from `<meta name="user-login">`.
 - **Navigation**: GitHub switches pages without a full reload, which is why `@match` covers all of `github.com/*` and the script gates itself with `isPrListPage()`.
 
 ## Demo page
@@ -28,3 +28,4 @@ The script runs on GitHub internals that are undocumented and change without not
 
 - User-facing settings live in the static `CONFIG` block at the top of the script, and each one is documented under Configuration in `README.md`.
 - User-facing changes update the README's Features and Configuration sections and bump `@version`.
+- `RELEASE_NOTES.md` covers only what changes for someone running the script. Updates to the demo, screenshots, or docs stay out of it.

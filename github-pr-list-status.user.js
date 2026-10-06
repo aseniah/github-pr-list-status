@@ -2,7 +2,7 @@
 // @name        GitHub PR List Status
 // @namespace   https://github.com/aseniah
 // @description Colors PRs by age and approval, and adds merge state and line count badges to the pull requests list
-// @version     1.1.1
+// @version     1.2
 // @license     MIT
 // @updateURL   https://raw.githubusercontent.com/aseniah/github-pr-list-status/main/github-pr-list-status.user.js
 // @downloadURL https://raw.githubusercontent.com/aseniah/github-pr-list-status/main/github-pr-list-status.user.js
@@ -72,6 +72,10 @@
   const DISCUSSION_ICON_PATH =
     "M1.75 1h8.5c.966 0 1.75.784 1.75 1.75v5.5A1.75 1.75 0 0 1 10.25 10H7.061l-2.574 2.573A1.458 1.458 0 0 1 2 11.543V10h-.25A1.75 1.75 0 0 1 0 8.25v-5.5C0 1.784.784 1 1.75 1ZM1.5 2.75v5.5c0 .138.112.25.25.25h1a.75.75 0 0 1 .75.75v2.19l2.72-2.72a.749.749 0 0 1 .53-.22h3.5a.25.25 0 0 0 .25-.25v-5.5a.25.25 0 0 0-.25-.25h-8.5a.25.25 0 0 0-.25.25Zm13 2a.25.25 0 0 0-.25-.25h-.5a.75.75 0 0 1 0-1.5h.5c.966 0 1.75.784 1.75 1.75v5.5A1.75 1.75 0 0 1 14.25 12H14v1.543a1.458 1.458 0 0 1-2.487 1.03L9.22 12.28a.749.749 0 0 1 .326-1.275.749.749 0 0 1 .734.215l2.22 2.22v-2.19a.75.75 0 0 1 .75-.75h1a.25.25 0 0 0 .25-.25Z";
 
+  // Primer octicon eye-16 (MIT).
+  const EYE_ICON_PATH =
+    "M8 2c1.981 0 3.671.992 4.933 2.078 1.27 1.091 2.187 2.345 2.637 3.023a1.62 1.62 0 0 1 0 1.798c-.45.678-1.367 1.932-2.637 3.023C11.67 13.008 9.981 14 8 14c-1.981 0-3.671-.992-4.933-2.078C1.797 10.83.88 9.576.43 8.898a1.62 1.62 0 0 1 0-1.798c.45-.677 1.367-1.931 2.637-3.022C4.33 2.992 6.019 2 8 2ZM1.679 7.932a.12.12 0 0 0 0 .136c.411.622 1.241 1.75 2.366 2.717C5.176 11.758 6.527 12.5 8 12.5c1.473 0 2.825-.742 3.955-1.715 1.124-.967 1.954-2.096 2.366-2.717a.12.12 0 0 0 0-.136c-.412-.621-1.242-1.75-2.366-2.717C10.824 4.242 9.473 3.5 8 3.5c-1.473 0-2.825.742-3.955 1.715-1.124.967-1.954 2.096-2.366 2.717ZM8 10a2 2 0 1 1-.001-3.999A2 2 0 0 1 8 10Z";
+
   const BADGE_CSS = `
     :root { --prb-row-yellow: #fff8c5; --prb-row-orange: #ffd8b1; --prb-row-red: #ffd0d0; --prb-row-green: #c8f5c8; }
     [data-color-mode="dark"] { --prb-row-yellow: #2f2a05; --prb-row-orange: #3d1f0d; --prb-row-red: #3c0614; --prb-row-green: #122117; }
@@ -108,6 +112,9 @@
     .prb-review-counts .chg { color: var(--fgColor-danger, #d1242f); }
     .prb-review-counts > span { display: inline-flex; align-items: center; gap: 3px; }
     .prb-review-counts svg { width: 14px; height: 14px; fill: currentColor; }
+    .prb-review-counts .rereq svg { width: 16px; height: 16px; }
+    .prb-review-counts .rereq circle { fill: var(--bgColor-accent-emphasis, #0969da); }
+    .prb-review-counts .rereq path { fill: var(--fgColor-onEmphasis, #fff); }
     .prb-legend { margin-top: 16px; border: 1px solid var(--borderColor-default, #d1d9e0); border-radius: 6px; font-size: 12px; color: var(--fgColor-muted, #59636e); }
     .prb-legend > summary { cursor: pointer; padding: 8px 16px; font-weight: 600; color: var(--fgColor-default, #1f2328); }
     .prb-legend-body { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 16px 48px; padding: 4px 16px 16px; }
@@ -234,6 +241,9 @@
       participants: (participants.participants || []).map(
         (p) => p.displayLogin,
       ),
+      pendingReviewers: (mergeBox.pullRequest.pendingReviewRequests || [])
+        .map((r) => r.reviewer?.login)
+        .filter(Boolean),
       mergeStateStatus: mergeBox.pullRequest.mergeStateStatus,
       checks: (checks.statusChecks || []).map((c) => ({
         name: c.displayName,
@@ -246,7 +256,7 @@
   function getPrInfo(prPath, { fresh = false } = {}) {
     if (!fresh && memoryCache.has(prPath)) return memoryCache.get(prPath);
 
-    const storageKey = `prb2:${CONFIG.excludeLockfiles ? "nolock" : "all"}:${prPath}`;
+    const storageKey = `prb3:${CONFIG.excludeLockfiles ? "nolock" : "all"}:${prPath}`;
     try {
       const stored = !fresh && JSON.parse(sessionStorage.getItem(storageKey));
       if (stored && Date.now() - stored.at < CACHE_TTL_MS) {
@@ -454,6 +464,36 @@
     ].filter((part) => part.people.length);
   }
 
+  // Submitting a review clears the reviewer's request, so a reviewer who is pending again was re-requested.
+  function isReRequested(info) {
+    const viewer = document.querySelector('meta[name="user-login"]')?.content;
+    if (!viewer || !info.pendingReviewers.includes(viewer)) return false;
+    return [
+      ...info.participants,
+      ...info.approvedBy,
+      ...info.changesRequestedBy,
+    ].includes(viewer);
+  }
+
+  function reRequestIcon() {
+    const ns = "http://www.w3.org/2000/svg";
+    const svg = document.createElementNS(ns, "svg");
+    svg.setAttribute("viewBox", "0 0 16 16");
+    svg.setAttribute("aria-hidden", "true");
+    const circle = document.createElementNS(ns, "circle");
+    circle.setAttribute("cx", "8");
+    circle.setAttribute("cy", "8");
+    circle.setAttribute("r", "8");
+    const path = document.createElementNS(ns, "path");
+    path.setAttribute("d", EYE_ICON_PATH);
+    path.setAttribute("transform", "translate(3 3) scale(0.625)");
+    svg.append(circle, path);
+    const el = document.createElement("span");
+    el.className = "rereq";
+    el.append(svg);
+    return el;
+  }
+
   function discussionIcon() {
     const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
     svg.setAttribute("viewBox", "0 0 16 16");
@@ -485,16 +525,19 @@
     const slot = reviewSlot(row);
     if (!slot) return;
     const parts = reviewSummary(info, row);
-    if (!parts.length) {
+    const reRequested = isReRequested(info);
+    if (!parts.length && !reRequested) {
       slot.replaceChildren();
       return;
     }
     const el = document.createElement("span");
     el.className = "prb-review-counts";
-    el.title = parts
-      .map((part) => `${part.label}: ${part.people.join(", ")}`)
-      .join("\n");
+    el.title = [
+      ...(reRequested ? ["Your review was re-requested"] : []),
+      ...parts.map((part) => `${part.label}: ${part.people.join(", ")}`),
+    ].join("\n");
     slot.replaceChildren(el);
+    if (reRequested) el.append(reRequestIcon());
     el.append(
       ...parts.map((part) => {
         const count = document.createElement("span");
@@ -612,7 +655,11 @@
           : "Lines added and deleted",
       ],
     ];
+    const reRequestSample = document.createElement("span");
+    reRequestSample.className = "prb-review-counts";
+    reRequestSample.append(reRequestIcon());
     const reviews = [
+      [reRequestSample, "You reviewed and were asked to review again"],
       [reviewCount("ok", "✓"), "People who approved"],
       [reviewCount("chg", "✗"), "People who requested changes"],
       [

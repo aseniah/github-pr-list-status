@@ -13,6 +13,7 @@ Works on GitHub's global pull request list at `github.com/pulls` (Authored by me
 - **Merge state at a glance.** Badges show what stands between each PR and merging, so you can tell which approved PRs are actually ready. A PR can show several at once, for example both Conflicts and Pipeline.
 - **Diff size.** A `+177 −80` badge shows lines added and deleted. Lockfiles are left out by default so dependency upgrades show the size you'd actually review. Hover for exact numbers and how many lockfile lines were skipped.
 - **Who has weighed in.** Under GitHub's comment count, `✓2` counts approvals, `✗1` counts change requests, and a discussion icon counts people who commented without deciding, such as someone asking a question. Hover for names. Pending reviewers who haven't interacted, the PR author, and bots aren't counted.
+- **Re-review requests.** A blue eye at the start of the review counts marks PRs you already reviewed or commented on where the author has asked for your review again, so you know to come back and look at their changes.
 - **Row colors by age and approval.** Approved PRs are green. Unapproved PRs turn yellow after a week, orange after two weeks, and red after a month.
 - **Live while checks run.** PRs showing **● Checking…** refresh themselves once a minute until their checks finish or GitHub settles their merge state.
 - **Deploy gates.** A failing check you name, such as a release lock, gets its own badge instead of counting as a failure. See [Configuration](#configuration).

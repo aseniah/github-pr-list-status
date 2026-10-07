@@ -1,5 +1,9 @@
 # Release Notes
 
+## 1.3.1
+
+- **Fresh checks when you return.** Switching back to the PR list tab refetches **● Checking…** rows right away if their once a minute refetch was missed while the tab was hidden, instead of waiting up to another minute.
+
 ## 1.3
 
 ### Features

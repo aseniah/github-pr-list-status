@@ -2,7 +2,7 @@
 // @name        GitHub PR List Status
 // @namespace   https://github.com/aseniah
 // @description Colors PRs by age and approval, and adds merge state and line count badges to the pull requests list
-// @version     1.3
+// @version     1.3.1
 // @license     MIT
 // @updateURL   https://raw.githubusercontent.com/aseniah/github-pr-list-status/main/github-pr-list-status.user.js
 // @downloadURL https://raw.githubusercontent.com/aseniah/github-pr-list-status/main/github-pr-list-status.user.js
@@ -944,9 +944,11 @@
     loadRow(group, row, { fresh: true, threads });
   }
 
+  let lastCheckingRefresh = Date.now();
   function refreshCheckingRows() {
     if (document.visibilityState !== "visible" || !isPrListPage()) return;
     if (rateLimited) return;
+    lastCheckingRefresh = Date.now();
     // Current badges stay up until fresh data replaces them, and stay put if a refetch fails.
     document
       .querySelectorAll('.prb-group[data-checking="true"]')
@@ -1031,5 +1033,11 @@
   });
   if (CONFIG.checkingRefreshSeconds > 0) {
     setInterval(refreshCheckingRows, CONFIG.checkingRefreshSeconds * 1000);
+    document.addEventListener("visibilitychange", () => {
+      const overdue =
+        Date.now() - lastCheckingRefresh >=
+        CONFIG.checkingRefreshSeconds * 1000;
+      if (overdue) refreshCheckingRows();
+    });
   }
 })();

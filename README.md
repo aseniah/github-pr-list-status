@@ -42,7 +42,7 @@ The list page doesn't include these details, so the script fetches them from the
 
 Badges load once when the list appears, and reloading the page always fetches fresh data. Moving between lists without a reload reuses results from the last minute, and at most four PRs load at a time. Waiting thread counts load after the main badges, and only for your own PRs that have comments. Two things refresh on their own:
 
-- **● Checking…** PRs refetch once a minute while the tab is visible, until their checks finish or GitHub settles their merge state.
+- **● Checking…** PRs refetch once a minute while the tab is visible, and right away when you switch back to the tab if a refetch was missed, until their checks finish or GitHub settles their merge state.
 - When you open a PR from the list and come back with the browser's Back button, that PR refetches, so changes you just made show up.
 
 These endpoints are undocumented and can change without notice. If a request fails, the row shows a ⚠ you can hover for the reason, and a line under the list counts the PRs that didn't fully load, with a **Retry** button that refetches just those PRs. If GitHub rate limits a request, the script stops making requests until you retry or reload.

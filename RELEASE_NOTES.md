@@ -1,5 +1,13 @@
 # Release Notes
 
+## 1.4
+
+- **Settings panel.** The full-width legend bar is gone. Below the list, **Settings** and **Legend** each open their own panel, and the load-failure message shares that line. Settings are saved in the browser, so they survive updates and apply to every GitHub tab. The **PR List Status** label next to them links to the project.
+- **Highlighted authors.** Pick authors from the PRs on the page and their names show in a gray chip on every list. Switch the chip to an animated 🌈 rainbow if you want them to stand out more. Saved authors stay listed in the panel even when they have no PRs on the page, so you can remove them.
+- **Feature toggles.** Turn row colors, merge state, check details, line counts, lockfile filtering, review counts, commenters, and waiting threads on or off one at a time. Turning off a feature also skips the requests only it needs.
+- **Fewer requests preset.** One click turns off the features that cost extra requests, cutting each PR from up to five requests to two. Badges load sooner and long lists are less likely to hit GitHub's rate limit. Failing checks then show as **✗ Failing** without a count. **Enable all** turns everything back on.
+- **Defaults from CONFIG.** `excludeLockfiles` and `flagWaitingThreads` now set the defaults for their panel toggles. Anything you change in the panel takes precedence.
+
 ## 1.3.1
 
 - **Fresh checks when you return.** Switching back to the PR list tab refetches **● Checking…** rows right away if their once a minute refetch was missed while the tab was hidden, instead of waiting up to another minute.

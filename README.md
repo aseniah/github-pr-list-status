@@ -16,9 +16,11 @@ Works on GitHub's global pull request list at `github.com/pulls` (Authored by me
 - **Re-review requests.** A blue eye at the start of the review counts marks PRs you already reviewed or commented on where the author has asked for your review again, so you know to come back and look at their changes.
 - **Threads waiting on you.** On PRs you opened, a blue reply icon with a count marks unresolved review threads where someone else had the last word and you haven't replied or reacted. Resolve the thread, reply, or react to its latest comment with any emoji to clear it. Hover for details.
 - **Row colors by age and approval.** Approved PRs are green. Unapproved PRs turn yellow after a week, orange after two weeks, and red after a month.
+- **Highlighted authors.** Pick teammates in the settings panel and their names stand out in a gray chip on every list, so you can spot their PRs first. Prefer something louder? Switch the chip to an animated 🌈 rainbow.
 - **Live while checks run.** PRs showing **● Checking…** refresh themselves once a minute until their checks finish or GitHub settles their merge state.
 - **Deploy gates.** A failing check you name, such as a release lock, gets its own badge instead of counting as a failure. See [Configuration](#configuration).
-- **Built-in legend.** A collapsible legend at the bottom of the list explains each row color, badge, and review count.
+- **Settings panel.** Click **Settings** below the list to choose highlighted authors and turn individual features on or off. **Fewer requests** turns off the features that cost extra requests, so badges load sooner and long lists are less likely to hit GitHub's rate limit. **Enable all** turns everything back on. Your choices are saved in the browser and survive updates.
+- **Built-in legend.** Click **Legend** below the list to see what each row color, badge, and review count means.
 - **Light and dark mode.** Colors come from GitHub's own theme.
 - **No token or setup.** It uses your existing GitHub login and only ever shows PRs you already have access to.
 
@@ -32,15 +34,23 @@ Works on GitHub's global pull request list at `github.com/pulls` (Authored by me
 | Blocked | Approved, but a merge requirement is still unmet |
 | 🔒 Pipeline | A deploy gate check is failing (see [Configuration](#configuration)) |
 
-The same key is available on the page itself. Expand **Legend** below the list to see it.
+With **Check details** turned off, failing checks show as a plain **✗ Failing** without a count or check names, and named checks like **🔒 Pipeline** aren't shown.
+
+The same key is available on the page itself. Click **Legend** below the list to see it.
 
 ![Legend explaining row colors, badges, and review counts](docs/legend.png)
+
+![Settings panel with highlighted authors and feature toggles](docs/settings.png)
 
 ## How it works
 
 The list page doesn't include these details, so the script fetches them from the same endpoints GitHub's own pull request page uses. Requests go to `github.com` with your existing login.
 
-Badges load once when the list appears, and reloading the page always fetches fresh data. Moving between lists without a reload reuses results from the last minute, and at most four PRs load at a time. Waiting thread counts load after the main badges, and only for your own PRs that have comments. Two things refresh on their own:
+Badges load once when the list appears, and reloading the page always fetches fresh data. Moving between lists without a reload reuses results from the last minute, and at most four PRs load at a time. Waiting thread counts load after the main badges, and only for your own PRs that have comments.
+
+Each PR needs up to five requests with every feature on. A request is skipped when every feature that uses it is off, and **Fewer requests** brings it down to two. Turning a feature off takes effect right away without new requests. Turning one on, or changing **Leave out lockfiles**, refetches the PRs on the page.
+
+Two things refresh on their own:
 
 - **● Checking…** PRs refetch once a minute while the tab is visible, and right away when you switch back to the tab if a refetch was missed, until their checks finish or GitHub settles their merge state.
 - When you open a PR from the list and come back with the browser's Back button, that PR refetches, so changes you just made show up.
@@ -91,7 +101,9 @@ In Tampermonkey, Violentmonkey, and Greasemonkey, deleting the header lines does
 
 ## Configuration
 
-All settings live in the `CONFIG` block at the top of the script. Edit them in your userscript manager's editor. An update replaces the whole file and your changes with it, so [turn off updates](#updates) for the script before editing, and keep a copy of your changes.
+Most people only need the settings panel. Click **Settings** below the list to pick highlighted authors, choose the chip style, and turn features on or off. Choices are saved in the browser's local storage for `github.com`, so they survive updates, apply to every GitHub tab, and stay on that browser.
+
+Everything else lives in the `CONFIG` block at the top of the script. Edit it in your userscript manager's editor. An update replaces the whole file and your changes with it, so [turn off updates](#updates) for the script before editing, and keep a copy of your changes.
 
 - `ageColors` and `approvedColor` set the row colors. Any CSS color works. The defaults are `var(--prb-row-green)` and similar, which switch between a light and a dark value along with GitHub's theme. The legend lists whatever thresholds and colors you set here, along with your `namedChecks` badges.
 - `namedChecks` gives specific checks their own badge. When a failing check matches a rule, the PR shows that rule's badge instead of counting the check toward **✗ N failing**. `match` is an exact check name or a regular expression, and `style` is one of `purple`, `blue`, `red`, `yellow`, `gray`, or `green`. The default rule turns a failing `Release Check` into **🔒 Pipeline**. Replace it with your own deploy gate, or leave it alone if you don't have one.
@@ -104,8 +116,8 @@ namedChecks: [
 ```
 
 - `ignoredReviewers` leaves accounts out of the review counts. Each entry is an exact login or a regular expression. The defaults skip `[bot]` accounts and Copilot.
-- `excludeLockfiles` leaves lockfiles out of the line counts and is on by default. `lockfilePattern` is the regular expression that decides what counts as a lockfile. It covers npm, Yarn, pnpm, Bun, Bundler, Cargo, Composer, Poetry, Pipenv, uv, Go, and Nix.
-- `flagWaitingThreads` turns the waiting threads count on or off. It's on by default and costs one extra request for each of your PRs that has comments.
+- `excludeLockfiles` sets the default for **Leave out lockfiles** in the settings panel and is on by default. `lockfilePattern` is the regular expression that decides what counts as a lockfile. It covers npm, Yarn, pnpm, Bun, Bundler, Cargo, Composer, Poetry, Pipenv, uv, Go, and Nix.
+- `flagWaitingThreads` sets the default for **Threads waiting on you** in the settings panel. It's on by default and costs one extra request for each of your PRs that has comments.
 - `cacheMinutes` sets how long results are reused when you move between lists without reloading. Reloading always fetches fresh data. `maxConcurrentPrs` sets how many PRs load at once.
 - `checkingRefreshSeconds` sets how often PRs with running checks refetch while the tab is visible. Set it to `0` to turn this off.
 

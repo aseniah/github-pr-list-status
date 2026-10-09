@@ -2,7 +2,7 @@
 // @name        GitHub PR List Status
 // @namespace   https://github.com/aseniah
 // @description Colors PRs by age and approval, and adds merge state and line count badges to the pull requests list
-// @version     1.4
+// @version     1.4.1
 // @license     MIT
 // @updateURL   https://raw.githubusercontent.com/aseniah/github-pr-list-status/main/github-pr-list-status.user.js
 // @downloadURL https://raw.githubusercontent.com/aseniah/github-pr-list-status/main/github-pr-list-status.user.js
@@ -695,18 +695,25 @@
     return pills;
   }
 
+  // PRs opened with Copilot show the person as the attributed author, "jdoe with Copilot".
+  const AUTHOR_LINKS =
+    '[data-testid="attributed-author-filter-link"], [data-testid="author-filter-link"]';
+
   // "Filter by author Full Name (login)", or just the login when there's no display name.
-  function authorLabel(row) {
-    const label =
-      row
-        .querySelector('[data-testid="author-filter-link"]')
-        ?.getAttribute("aria-label") || "";
-    return label.replace(/^Filter by author\s+/, "").trim();
+  function rowAuthors(row) {
+    return [...row.querySelectorAll(AUTHOR_LINKS)]
+      .map((link) => {
+        const label = (link.getAttribute("aria-label") || "")
+          .replace(/^Filter by author\s+/, "")
+          .trim();
+        const login = label.match(/\(([^)]+)\)\s*$/)?.[1] ?? label;
+        return { link, label, login };
+      })
+      .filter((author) => author.login);
   }
 
-  function prAuthor(row) {
-    const label = authorLabel(row);
-    return label.match(/\(([^)]+)\)\s*$/)?.[1] ?? label;
+  function prAuthors(row) {
+    return rowAuthors(row).map((author) => author.login);
   }
 
   // Approvals and change requests come from each reviewer's latest decision. Anyone else who joined
@@ -716,7 +723,7 @@
       CONFIG.ignoredReviewers.some((m) => checkMatches(m, login));
     const approved = info.approvedBy.filter((l) => !ignored(l));
     const changes = info.changesRequestedBy.filter((l) => !ignored(l));
-    const decided = new Set([...approved, ...changes, prAuthor(row)]);
+    const decided = new Set([...approved, ...changes, ...prAuthors(row)]);
     const commented = info.participants.filter(
       (l) => !decided.has(l) && !ignored(l),
     );
@@ -752,7 +759,7 @@
   function wantsWaitingThreads(row) {
     return (
       isOn("waitingThreads") &&
-      prAuthor(row) === viewerLogin() &&
+      prAuthors(row).includes(viewerLogin()) &&
       !!row.querySelector("svg.octicon-comment")
     );
   }
@@ -1031,17 +1038,17 @@
   }
 
   function applyAuthorHighlight(row) {
-    const link = row.querySelector('[data-testid="author-filter-link"]');
-    if (!link) return;
-    const highlighted = settings.authors.has(prAuthor(row).toLowerCase());
-    const wanted = highlighted ? ["prb-hl", `prb-hl-${settings.style}`] : [];
-    ["prb-hl", ...HIGHLIGHT_STYLES.map((s) => `prb-hl-${s}`)].forEach(
-      (name) => {
-        const on = wanted.includes(name);
-        if (link.classList.contains(name) !== on)
-          link.classList.toggle(name, on);
-      },
-    );
+    rowAuthors(row).forEach(({ link, login }) => {
+      const highlighted = settings.authors.has(login.toLowerCase());
+      const wanted = highlighted ? ["prb-hl", `prb-hl-${settings.style}`] : [];
+      ["prb-hl", ...HIGHLIGHT_STYLES.map((s) => `prb-hl-${s}`)].forEach(
+        (name) => {
+          const on = wanted.includes(name);
+          if (link.classList.contains(name) !== on)
+            link.classList.toggle(name, on);
+        },
+      );
+    });
   }
 
   function listRows() {
@@ -1055,8 +1062,10 @@
   function pageAuthors() {
     const authors = new Map();
     listRows().forEach((row) => {
-      const login = prAuthor(row).toLowerCase();
-      if (login && !authors.has(login)) authors.set(login, authorLabel(row));
+      rowAuthors(row).forEach(({ login, label }) => {
+        const key = login.toLowerCase();
+        if (!authors.has(key)) authors.set(key, label);
+      });
     });
     return authors;
   }

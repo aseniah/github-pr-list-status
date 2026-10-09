@@ -1,5 +1,9 @@
 # Release Notes
 
+## 1.4.1
+
+- **Copilot co-authors.** On PRs opened with Copilot, the person shown before "with Copilot" is now listed under **Highlighted authors** alongside Copilot, and either one can be highlighted. They also count as the PR's author for commenters and threads waiting on you.
+
 ## 1.4
 
 - **Settings panel.** The full-width legend bar is gone. Below the list, **Settings** and **Legend** each open their own panel, and the load-failure message shares that line. Settings are saved in the browser, so they survive updates and apply to every GitHub tab. The **PR List Status** label next to them links to the project.

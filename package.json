@@ -1,0 +1,14 @@
+{
+  "name": "github-pr-list-status",
+  "private": true,
+  "description": "Development tooling for the GitHub PR List Status userscript. The script itself has no dependencies.",
+  "license": "MIT",
+  "scripts": {
+    "check": "node --check github-pr-list-status.user.js && biome check && npm test",
+    "fix": "biome check --write",
+    "test": "node --test tests/*.test.js"
+  },
+  "devDependencies": {
+    "@biomejs/biome": "2.5.15"
+  }
+}

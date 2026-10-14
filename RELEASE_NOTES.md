@@ -1,5 +1,13 @@
 # Release Notes
 
+## 1.5
+
+- **Related tickets.** Ticket keys in PR titles, such as `PAY-2210`, `pay_2210`, or `Feature/pay 2210`, show as a pill before the title. Turn it off with **Related tickets** in the settings panel.
+  - A colored pill means other PRs on the page share the key. Hovering it dims the rest of the list, and a bouncing arrow points to related PRs that are out of view.
+  - A gray pill means only this PR has the key.
+  - Clicking any pill opens a new tab searching for related PRs in any state.
+- **Merged and closed rows are gray.** They no longer take the approval or age color, so an old merged PR no longer shows red.
+
 ## 1.4.1
 
 - **Copilot co-authors.** On PRs opened with Copilot, the person shown before "with Copilot" is now listed under **Highlighted authors** alongside Copilot, and either one can be highlighted. They also count as the PR's author for commenters and threads waiting on you.

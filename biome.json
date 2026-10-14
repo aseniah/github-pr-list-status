@@ -1,0 +1,13 @@
+{
+  "files": {
+    "includes": ["github-pr-list-status.user.js", "scripts/*.js", "tests/*.js"]
+  },
+  "formatter": { "indentStyle": "space" },
+  "linter": {
+    "rules": {
+      "preset": "recommended",
+      "correctness": { "noUndeclaredVariables": "on" },
+      "suspicious": { "useIterableCallbackReturn": "off" }
+    }
+  }
+}

@@ -15,7 +15,8 @@ Works on GitHub's global pull request list at `github.com/pulls` (Authored by me
 - **Who has weighed in.** Under GitHub's comment count, `✓2` counts approvals, `✗1` counts change requests, and a discussion icon counts people who commented without deciding, such as someone asking a question. Hover for names. Pending reviewers who haven't interacted, the PR author, and bots aren't counted.
 - **Re-review requests.** A blue eye at the start of the review counts marks PRs you already reviewed or commented on where the author has asked for your review again, so you know to come back and look at their changes.
 - **Threads waiting on you.** On PRs you opened, a blue reply icon with a count marks unresolved review threads where someone else had the last word and you haven't replied or reacted. Resolve the thread, reply, or react to its latest comment with any emoji to clear it. Hover for details.
-- **Row colors by age and approval.** Approved PRs are green. Unapproved PRs turn yellow after a week, orange after two weeks, and red after a month.
+- **Row colors by age and approval.** Approved PRs are green. Unapproved PRs turn yellow after a week, orange after two weeks, and red after a month. Merged and closed PRs are gray, so they read as done when a search turns them up.
+- **Related tickets.** Jira-style ticket keys in titles, such as `PAY-2210`, `pay_2210`, or `Feature/pay 2210`, get a pill in front of the title. A key shared by more than one PR on the page gets a colored pill, and hovering it dims every other row. If a related PR is partly or fully out of view, a bouncing arrow at the top or bottom of the window says how many. A key only one PR on the page has gets a gray pill. Clicking any pill opens a new tab searching every PR in those organizations whose title or description mentions the key, including merged, closed, and draft PRs and ones you weren't asked to review. It needs no requests.
 - **Highlighted authors.** Pick teammates in the settings panel and their names stand out in a gray chip on every list, so you can spot their PRs first. Prefer something louder? Switch the chip to an animated 🌈 rainbow.
 - **Live while checks run.** PRs showing **● Checking…** refresh themselves once a minute until their checks finish or GitHub settles their merge state.
 - **Deploy gates.** A failing check you name, such as a release lock, gets its own badge instead of counting as a failure. See [Configuration](#configuration).
@@ -105,7 +106,7 @@ Most people only need the settings panel. Click **Settings** below the list to p
 
 Everything else lives in the `CONFIG` block at the top of the script. Edit it in your userscript manager's editor. An update replaces the whole file and your changes with it, so [turn off updates](#updates) for the script before editing, and keep a copy of your changes.
 
-- `ageColors` and `approvedColor` set the row colors. Any CSS color works. The defaults are `var(--prb-row-green)` and similar, which switch between a light and a dark value along with GitHub's theme. The legend lists whatever thresholds and colors you set here, along with your `namedChecks` badges.
+- `ageColors`, `approvedColor`, and `doneColor` set the row colors. `doneColor` covers merged and closed PRs. Any CSS color works. The defaults are `var(--prb-row-green)` and similar, which switch between a light and a dark value along with GitHub's theme. The legend lists whatever thresholds and colors you set here, along with your `namedChecks` badges.
 - `namedChecks` gives specific checks their own badge. When a failing check matches a rule, the PR shows that rule's badge instead of counting the check toward **✗ N failing**. `match` is an exact check name or a regular expression, and `style` is one of `purple`, `blue`, `red`, `yellow`, `gray`, or `green`. The default rule turns a failing `Release Check` into **🔒 Pipeline**. Replace it with your own deploy gate, or leave it alone if you don't have one.
 
 ```js
@@ -124,6 +125,10 @@ namedChecks: [
 ## Limitations
 
 - Generated files other than lockfiles, such as snapshots or compiled output, still count toward the line totals. Extend `lockfilePattern` to skip them.
+- Ticket keys are matched by pattern, so a title like "Target release 2026" or "Use SHA-256" can be marked as a key.
+  - Some lookalikes never count. A space between the letters and the number needs three or more digits, which keeps phrases like "Node 22" out, and a second number part rules a match out, so CVE-2024-1234 and ubuntu-22.04 don't count.
+  - When a title has more than one key, a dash or underscore beats a space, and a key opened by a paren or bracket, as in `feat(PAY-2210)` or `[PAY-2210]`, beats the same form without one.
+  - Standards like SHA, UTF, ISO, RFC, and CWE lose to any other key in the title.
 - It relies on undocumented GitHub endpoints and page structure, so a GitHub update can break it until the script is fixed.
 
 ## License

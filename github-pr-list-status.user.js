@@ -2,7 +2,7 @@
 // @name        GitHub PR List Status
 // @namespace   https://github.com/aseniah
 // @description Colors PRs by age and approval, and adds merge state and line count badges to the pull requests list
-// @version     1.4.1
+// @version     1.5
 // @license     MIT
 // @updateURL   https://raw.githubusercontent.com/aseniah/github-pr-list-status/main/github-pr-list-status.user.js
 // @downloadURL https://raw.githubusercontent.com/aseniah/github-pr-list-status/main/github-pr-list-status.user.js
@@ -10,7 +10,7 @@
 // @run-at      document-idle
 // ==/UserScript==
 
-(function () {
+(() => {
   const CONFIG = {
     // Row color for unapproved PRs, by age. The first entry the PR is younger than wins.
     // Any CSS color works. The --prb-row-* defaults switch between light and dark values with GitHub's theme.
@@ -21,6 +21,7 @@
       { days: Infinity, color: "var(--prb-row-red)" }, // > 1 month: red
     ],
     approvedColor: "var(--prb-row-green)", // green
+    doneColor: "var(--bgColor-neutral-muted, #818b981f)", // merged or closed: gray
 
     // A failing check matching one of these gets its own badge instead of counting toward "N failing".
     // match: exact check name or a RegExp. style: purple, blue, red, yellow, gray, or green.
@@ -60,6 +61,13 @@
       key: "rowColors",
       label: "Row colors",
       description: "Age and approval colors. No requests.",
+      default: true,
+    },
+    {
+      key: "ticketGroups",
+      label: "Related tickets",
+      description:
+        "Colors ticket keys shared by PRs on the page and links each key to a search for related PRs. No requests.",
       default: true,
     },
     {
@@ -173,6 +181,7 @@
       (f) =>
         f.key !== "waitingThreads" &&
         f.key !== "excludeLockfiles" &&
+        f.key !== "ticketGroups" &&
         settings.features[f.key] &&
         !info.features?.[f.key],
     );
@@ -226,10 +235,10 @@
     "M6.78 1.97a.75.75 0 0 1 0 1.06L3.81 6h6.44A4.75 4.75 0 0 1 15 10.75v2.5a.75.75 0 0 1-1.5 0v-2.5a3.25 3.25 0 0 0-3.25-3.25H3.81l2.97 2.97a.749.749 0 0 1-.326 1.275.749.749 0 0 1-.734-.215L.47 7.28a.75.75 0 0 1 0-1.06l4.25-4.25a.75.75 0 0 1 1.06 0Z";
 
   const BADGE_CSS = `
-    :root { --prb-row-yellow: #fff8c5; --prb-row-orange: #ffd8b1; --prb-row-red: #ffd0d0; --prb-row-green: #c8f5c8; --prb-hl-solid: #6e7781; }
-    [data-color-mode="dark"] { --prb-row-yellow: #2f2a05; --prb-row-orange: #3d1f0d; --prb-row-red: #3c0614; --prb-row-green: #122117; --prb-hl-solid: #6e7681; }
+    :root { --prb-row-yellow: #fff8c5; --prb-row-orange: #ffd8b1; --prb-row-red: #ffd0d0; --prb-row-green: #c8f5c8; --prb-hl-solid: #6e7781; --prb-tg-0: #0969da; --prb-tg-1: #8250df; --prb-tg-2: #bf3989; --prb-tg-3: #1b7c83; --prb-tg-4: #bc4c00; --prb-tg-5: #6e7781; }
+    [data-color-mode="dark"] { --prb-row-yellow: #2f2a05; --prb-row-orange: #3d1f0d; --prb-row-red: #3c0614; --prb-row-green: #122117; --prb-hl-solid: #6e7681; --prb-tg-0: #4493f8; --prb-tg-1: #ab7df8; --prb-tg-2: #db61a2; --prb-tg-3: #39c5cf; --prb-tg-4: #db6d28; --prb-tg-5: #9198a1; }
     @media (prefers-color-scheme: dark) {
-      [data-color-mode="auto"] { --prb-row-yellow: #2f2a05; --prb-row-orange: #3d1f0d; --prb-row-red: #3c0614; --prb-row-green: #122117; --prb-hl-solid: #6e7681; }
+      [data-color-mode="auto"] { --prb-row-yellow: #2f2a05; --prb-row-orange: #3d1f0d; --prb-row-red: #3c0614; --prb-row-green: #122117; --prb-hl-solid: #6e7681; --prb-tg-0: #4493f8; --prb-tg-1: #ab7df8; --prb-tg-2: #db61a2; --prb-tg-3: #39c5cf; --prb-tg-4: #db6d28; --prb-tg-5: #9198a1; }
     }
     .prb-group { float: right; display: inline-flex; gap: 6px; margin: 2px 16px 0 12px; }
     .prb { display: inline-flex; align-items: center; gap: 4px; font-size: 12px; font-weight: 500; line-height: 18px; padding: 0 7px; border-radius: 2em; border: 1px solid transparent; white-space: nowrap; }
@@ -276,10 +285,11 @@
     .prb-status button:hover { text-decoration: underline; }
     .prb-legend { margin-top: 8px; border: 1px solid var(--borderColor-default, #d1d9e0); border-radius: 6px; font-size: 12px; color: var(--fgColor-muted, #59636e); }
     .prb-legend-body { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 16px 48px; padding: 12px 16px 16px; }
-    .prb-legend-body > div { flex: 0 1 auto; min-width: 260px; }
+    .prb-legend-body > div { flex: 0 0 auto; }
+    .prb-legend-body > div:nth-child(2) { flex: 1 1 0; min-width: 240px; }
     .prb-legend h4 { margin: 0 0 8px; font-size: 12px; font-weight: 600; color: var(--fgColor-default, #1f2328); }
     .prb-legend dl { display: grid; grid-template-columns: max-content 1fr; gap: 8px 12px; align-items: start; margin: 0; }
-    .prb-legend dt { display: flex; align-items: center; min-height: 20px; }
+    .prb-legend dt { display: flex; align-items: center; justify-content: flex-end; min-height: 20px; }
     .prb-legend dd { margin: 0; line-height: 20px; }
     .prb-legend-swatch { width: 32px; height: 16px; border-radius: 4px; border: 1px solid var(--borderColor-default, #d1d9e0); }
     .prb-legend .prb-review-counts { position: static; }
@@ -298,6 +308,21 @@
     .prb-hl.prb-hl-rainbow { color: #fff; text-shadow: 0 1px 1px rgba(0, 0, 0, 0.4); background: repeating-linear-gradient(90deg, #cf222e 0, #bc4c00 40px, #9a6700 80px, #1a7f37 120px, #0969da 160px, #8250df 200px, #cf222e 240px); background-attachment: fixed; animation: prb-rainbow 3s linear infinite; }
     @keyframes prb-rainbow { to { background-position: 240px 0; } }
     @media (prefers-reduced-motion: reduce) { .prb-hl.prb-hl-rainbow { animation: none; } }
+    .prb-tg-0 { --prb-tg: var(--prb-tg-0); } .prb-tg-1 { --prb-tg: var(--prb-tg-1); } .prb-tg-2 { --prb-tg: var(--prb-tg-2); }
+    .prb-tg-3 { --prb-tg: var(--prb-tg-3); } .prb-tg-4 { --prb-tg: var(--prb-tg-4); } .prb-tg-5 { --prb-tg: var(--prb-tg-5); }
+    .prb-ticket { display: inline-flex; align-items: center; margin-right: 6px; padding: 0 7px; border: 1px solid var(--prb-tg); border-radius: 2em; background: color-mix(in srgb, var(--prb-tg) 14%, var(--bgColor-default, #fff)); color: var(--prb-tg); font-size: 12px; font-weight: 600; line-height: 18px; vertical-align: 2px; white-space: nowrap; text-decoration: none; cursor: pointer; }
+    .prb-ticket:hover { text-decoration: underline; }
+    .prb-ticket.prb-ticket-single { --prb-tg: var(--fgColor-muted, #59636e); background: var(--bgColor-default, #fff); }
+    .prb-legend .prb-ticket { margin-right: 0; }
+    .prb-tg-dim > li { transition: opacity 0.12s; }
+    .prb-tg-dim > li:not(.prb-tg-hot) { opacity: 0.4; }
+    .prb-tg-arrow { position: fixed; left: 50%; z-index: 100; display: inline-flex; align-items: center; padding: 4px 12px; border: 1px solid var(--prb-tg); border-radius: 2em; background: var(--bgColor-default, #fff); color: var(--prb-tg); font: inherit; font-size: 12px; font-weight: 600; box-shadow: 0 4px 12px rgba(37, 41, 46, 0.18); pointer-events: none; animation: prb-tg-bounce 1.2s ease-in-out infinite; }
+    .prb-tg-arrow[hidden] { display: none; }
+    .prb-tg-arrow.up { top: 12px; --prb-dir: -1; }
+    /* Sits above the link preview browsers draw at the bottom of the window. */
+    .prb-tg-arrow.down { bottom: 48px; --prb-dir: 1; }
+    @keyframes prb-tg-bounce { 0%, 100% { transform: translate(-50%, 0); } 50% { transform: translate(-50%, calc(var(--prb-dir) * 4px)); } }
+    @media (prefers-reduced-motion: reduce) { .prb-tg-arrow { animation: none; transform: translateX(-50%); } }
     .prb-panel-body { display: flex; flex-wrap: wrap; gap: 16px 48px; padding: 12px 16px 16px; }
     .prb-panel-body > section { flex: 1 1 340px; }
     .prb-section-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 8px; min-height: 24px; }
@@ -339,7 +364,7 @@
     const reviewIcon = row.querySelector(
       '[data-testid="review-decision-icon"]',
     );
-    if (reviewIcon && reviewIcon.textContent.includes("Approved")) return true;
+    if (reviewIcon?.textContent.includes("Approved")) return true;
 
     // Fallback: search any element with an aria-label mentioning Approved,
     // or plain text "Approved" inside the row (old UI sometimes just has a label/span)
@@ -351,6 +376,15 @@
     );
   }
 
+  // The row's first icon is its state: open, draft, merged, or closed.
+  function isDone(row) {
+    const icon = row.querySelector("svg");
+    return (
+      !!icon?.classList.contains("octicon-git-merge") ||
+      !!icon?.classList.contains("octicon-git-pull-request-closed")
+    );
+  }
+
   function applyHighlight(row, timeEl) {
     const datetime = timeEl.getAttribute("datetime");
     if (!datetime) return;
@@ -359,9 +393,11 @@
       return;
     }
 
-    const color = isApproved(row)
-      ? CONFIG.approvedColor
-      : getColor(new Date(datetime));
+    const color = isDone(row)
+      ? CONFIG.doneColor
+      : isApproved(row)
+        ? CONFIG.approvedColor
+        : getColor(new Date(datetime));
     row.style.backgroundColor = color;
     row.style.transition = "background-color 0.2s";
   }
@@ -949,7 +985,22 @@
         swatch(t.color),
         `Not approved, ${ageRangeLabel(CONFIG.ageColors[i - 1]?.days, t.days)} old`,
       ]),
+      [swatch(CONFIG.doneColor), "Merged or closed"],
     ];
+    const ticketSample = (className) =>
+      element("span", { className, textContent: "ABC-123" });
+    const tickets = isOn("ticketGroups")
+      ? [
+          [
+            ticketSample("prb-ticket prb-tg-0"),
+            "A ticket key: other PRs on this page share it. Hover to find them, click to search every PR that mentions it.",
+          ],
+          [
+            ticketSample("prb-ticket prb-ticket-single"),
+            "A ticket key: only this PR on the page has it. Click to search for related PRs.",
+          ],
+        ]
+      : [];
     const badges = [
       [
         pill("prb-ready", "✓ Ready"),
@@ -986,6 +1037,7 @@
       ],
       [errorMark(), "Some details didn't load. Hover for why."],
       [authorChip("John Doe (jdoe)"), "An author you chose to highlight"],
+      ...tickets,
     ];
     const reviewSample = (icon) => {
       const counts = document.createElement("span");
@@ -1052,9 +1104,7 @@
   }
 
   function listRows() {
-    return [
-      ...document.querySelectorAll('[data-testid="timestamp-container"]'),
-    ]
+    return [...document.querySelectorAll('[data-testid="timestamp-container"]')]
       .map((container) => container.closest("li"))
       .filter(Boolean);
   }
@@ -1233,9 +1283,7 @@
     const focused = document.activeElement?.dataset?.prbFocus;
     body.replaceChildren(authorsSection(), featuresSection());
     if (focused)
-      body
-        .querySelector(`[data-prb-focus="${CSS.escape(focused)}"]`)
-        ?.focus();
+      body.querySelector(`[data-prb-focus="${CSS.escape(focused)}"]`)?.focus();
     renderedAuthors = authorSignature();
   }
 
@@ -1381,9 +1429,14 @@
     status.replaceChildren(summary, retry);
   }
 
+  // The title's inline heading is an h3 on some lists and an h4 on others, such as repo and search lists.
+  function titleHeading(link) {
+    return link?.closest("h1, h2, h3, h4, h5, h6");
+  }
+
   function addBadges(row) {
     const link = row.querySelector('a[data-testid="listitem-title-link"]');
-    const titleContainer = link?.closest("h3")?.parentElement;
+    const titleContainer = titleHeading(link)?.parentElement;
     if (!titleContainer) return;
 
     const prPath = new URL(link.href).pathname;
@@ -1403,7 +1456,7 @@
     group.className = "prb-group";
     group.dataset.prPath = prPath;
     showLoading(group);
-    // Floated, so it has to come before the h3 to sit on the title's first line.
+    // Floated, so it has to come before the heading to sit on the title's first line.
     titleContainer.prepend(group);
     loadRow(group, row, {});
   }
@@ -1499,6 +1552,214 @@
       });
   }
 
+  // Matches PAY-2210, pay_2210, and Feature/pay 2210. A space needs 3+ digits so "Node 22" doesn't count.
+  // A second number part, as in CVE-2024-1234 or ubuntu-22.04, rules the match out. Underscores
+  // around the key are allowed, so the edges are lookarounds rather than \b.
+  const TICKET_PATTERN =
+    /(?<![a-z0-9])([a-z][a-z0-9]{1,9})([-_ ])(\d{2,})(?![a-z0-9]|[-_.]\d)/gi;
+  // Standards like SHA-256 look like keys. They still count, but any other key wins.
+  const UNLIKELY_PROJECTS = new Set(["CWE", "ISO", "RFC", "SHA", "UTF"]);
+  const TICKET_COLORS = 6;
+
+  // Takes the most key-like match, so "Return 404 for PAY-2210" finds PAY-2210. A key opened by a
+  // paren or bracket, as in feat(PAY-2210) or [PAY-2210], wins over the same form without one.
+  function findTicket(text) {
+    let best = null;
+    for (const match of text.matchAll(TICKET_PATTERN)) {
+      const [, project, separator, number] = match;
+      if (separator === " " && number.length < 3) continue;
+      const rank =
+        (UNLIKELY_PROJECTS.has(project.toUpperCase()) ? 4 : 0) +
+        (separator === " " ? 2 : 0) +
+        ("([".includes(text[match.index - 1]) ? 0 : 1);
+      if (!best || rank < best.rank)
+        best = { key: `${project.toUpperCase()}-${number}`, rank };
+    }
+    return best;
+  }
+
+  function titleLink(row) {
+    return row.querySelector('a[data-testid="listitem-title-link"]');
+  }
+
+  // The pill sits before the title's heading, outside GitHub's link, so its clicks and hovers are its own.
+  function ticketPill(link) {
+    const heading = titleHeading(link);
+    if (!heading) return null;
+    const existing = heading.previousElementSibling;
+    if (existing?.classList.contains("prb-ticket")) return existing;
+    const el = element("a", { target: "_blank", rel: "noopener" });
+    heading.before(el);
+    return el;
+  }
+
+  function removePill(link) {
+    const pill = titleHeading(link)?.previousElementSibling;
+    if (pill?.classList.contains("prb-ticket")) pill.remove();
+  }
+
+  // Keys shared by several rows get a color, in order of first appearance. Single keys stay neutral.
+  function applyTicketKeys() {
+    const rows = listRows().map((row) => {
+      const link = titleLink(row);
+      return {
+        row,
+        link,
+        key:
+          isOn("ticketGroups") && link
+            ? findTicket(link.textContent)?.key
+            : null,
+      };
+    });
+    const counts = new Map();
+    rows.forEach(
+      ({ key }) => key && counts.set(key, (counts.get(key) || 0) + 1),
+    );
+    const colors = new Map();
+    counts.forEach(
+      (n, key) => n > 1 && colors.set(key, colors.size % TICKET_COLORS),
+    );
+
+    const owners = new Map();
+    rows.forEach(({ link, key }) => {
+      if (!key) return;
+      if (!owners.has(key)) owners.set(key, new Set());
+      owners.get(key).add(new URL(link.href).pathname.split("/")[1]);
+    });
+
+    rows.forEach(({ row, link, key }) => {
+      const shared = key && colors.has(key);
+      if (shared && row.dataset.prbTicket !== key) row.dataset.prbTicket = key;
+      if (!shared && row.dataset.prbTicket) delete row.dataset.prbTicket;
+      if (!key) return removePill(link);
+      const el = ticketPill(link);
+      if (!el) return;
+      const href = ticketSearchUrl(key, owners.get(key));
+      if (el.dataset.ticket !== key) el.dataset.ticket = key;
+      if (el.textContent !== key) el.textContent = key;
+      if (el.href !== href) el.href = href;
+      const className = shared
+        ? `prb-ticket prb-tg-${colors.get(key)}`
+        : "prb-ticket prb-ticket-single";
+      const title = shared
+        ? `${counts.get(key)} PRs on this page reference ${key}. Click to search every PR that mentions it.`
+        : `The only PR on this page with ${key}. Opens a search for every PR that mentions it.`;
+      if (el.className !== className) el.className = className;
+      if (el.title !== title) el.title = title;
+    });
+    if (activeTicket.key && !colors.has(activeTicket.key))
+      setActiveTicket(null);
+  }
+
+  // GitHub search matches "PAY-2210" against "pay 2210", but an underscore joins the token, so it needs its own term.
+  function ticketSearchUrl(key, owners) {
+    const [project, number] = key.split("-");
+    const query = [
+      `is:pr ("${key}" OR "${project}_${number}") in:title,body`,
+      ...[...owners].map((owner) => `org:${owner}`),
+      "sort:updated-desc",
+    ].join(" ");
+    return `https://github.com/pulls?q=${encodeURIComponent(query)}`;
+  }
+
+  // Hovering a shared key dims the other rows. Browsers repeat mouse events at the same clientX/Y after
+  // a scroll, so the group stays active while scrolling and ends only when the pointer really moves away.
+  const activeTicket = { key: null, color: "", row: null, x: -1, y: -1 };
+  let ticketArrows = null;
+
+  function groupRows() {
+    return listRows().filter(
+      (row) => activeTicket.key && row.dataset.prbTicket === activeTicket.key,
+    );
+  }
+
+  function setActiveTicket(el) {
+    const key = el?.dataset.ticket ?? null;
+    if (key === activeTicket.key) return;
+    activeTicket.key = key;
+    activeTicket.row = el?.closest("li") ?? null;
+    activeTicket.color = el
+      ? getComputedStyle(el).getPropertyValue("--prb-tg").trim()
+      : "";
+    document
+      .querySelectorAll(".prb-tg-dim")
+      .forEach((list) => list.classList.remove("prb-tg-dim"));
+    document
+      .querySelectorAll(".prb-tg-hot")
+      .forEach((row) => row.classList.remove("prb-tg-hot"));
+    groupRows().forEach((row) => {
+      row.classList.add("prb-tg-hot");
+      row.parentElement.classList.add("prb-tg-dim");
+    });
+    updateTicketArrows();
+  }
+
+  function createTicketArrows() {
+    const arrow = (direction) => {
+      const el = element("div", {
+        className: `prb-tg-arrow ${direction}`,
+        hidden: true,
+      });
+      el.setAttribute("aria-hidden", "true");
+      document.body.append(el);
+      return el;
+    };
+    return { up: arrow("up"), down: arrow("down") };
+  }
+
+  // Arrow text changes are DOM mutations, which rerun highlight(), so only write what changed.
+  function setArrow(arrow, count, symbol) {
+    if (arrow.hidden !== !count) arrow.hidden = !count;
+    if (!count) return;
+    const text = `${symbol} ${count} more ${activeTicket.key}`;
+    if (arrow.textContent !== text) arrow.textContent = text;
+    if (arrow.style.getPropertyValue("--prb-tg") !== activeTicket.color)
+      arrow.style.setProperty("--prb-tg", activeTicket.color);
+  }
+
+  function updateTicketArrows() {
+    if (!activeTicket.key && !ticketArrows) return;
+    ensureStyles();
+    ticketArrows ||= createTicketArrows();
+    // Any related row not fully in view counts. The hovered row counts only once scrolled fully away.
+    const rects = groupRows().map((row) => [row, row.getBoundingClientRect()]);
+    const counted = rects.filter(
+      ([row, rect]) =>
+        row !== activeTicket.row || rect.bottom <= 0 || rect.top >= innerHeight,
+    );
+    const above = counted.filter(([, rect]) => rect.top < 0);
+    const below = counted.filter(([, rect]) => rect.bottom > innerHeight);
+    setArrow(ticketArrows.up, above.length, "↑");
+    setArrow(ticketArrows.down, below.length, "↓");
+  }
+
+  document.addEventListener(
+    "mousemove",
+    (event) => {
+      if (event.clientX === activeTicket.x && event.clientY === activeTicket.y)
+        return;
+      activeTicket.x = event.clientX;
+      activeTicket.y = event.clientY;
+      const el = event.target.closest?.(
+        ".prb-ticket[data-ticket]:not(.prb-ticket-single)",
+      );
+      if (el) setActiveTicket(el);
+      else if (activeTicket.key) setActiveTicket(null);
+    },
+    { passive: true },
+  );
+  window.addEventListener(
+    "scroll",
+    () => activeTicket.key && updateTicketArrows(),
+    {
+      passive: true,
+    },
+  );
+  window.addEventListener(
+    "resize",
+    () => activeTicket.key && updateTicketArrows(),
+  );
+
   // Opening a PR from the list is a full page load, and Back can restore the frozen list from the
   // browser's back-forward cache without rerunning anything, so refresh the PRs opened from here.
   const openedPrs = new Set();
@@ -1529,7 +1790,10 @@
   }
 
   function highlight() {
-    if (!isPrListPage()) return;
+    if (!isPrListPage()) {
+      if (activeTicket.key) setActiveTicket(null);
+      return;
+    }
 
     // Old experience: rows identified by [data-id]
     document.querySelectorAll("[data-id]").forEach((row) => {
@@ -1550,6 +1814,7 @@
         applyAuthorHighlight(row);
         addBadges(row);
       });
+    applyTicketKeys();
     addFooter();
     // Runs on every DOM change, so the author list rebuilds only when the page's authors change.
     if (renderedAuthors !== authorSignature()) renderPanel();

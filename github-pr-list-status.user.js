@@ -2,7 +2,7 @@
 // @name        GitHub PR List Status
 // @namespace   https://github.com/aseniah
 // @description Colors PRs by age and approval, and adds merge state and line count badges to the pull requests list
-// @version     1.5
+// @version     1.5.1
 // @license     MIT
 // @updateURL   https://raw.githubusercontent.com/aseniah/github-pr-list-status/main/github-pr-list-status.user.js
 // @downloadURL https://raw.githubusercontent.com/aseniah/github-pr-list-status/main/github-pr-list-status.user.js
@@ -247,8 +247,7 @@
     .prb-size .del { color: var(--fgColor-danger, #d1242f); }
     .prb-ready    { background: var(--bgColor-success-emphasis, #1a7f37); color: var(--fgColor-onEmphasis, #fff); }
     .prb-behind   { background: var(--bgColor-attention-muted, #fff8c5); border-color: var(--borderColor-attention-emphasis, #d4a72c); color: var(--fgColor-attention, #9a6700); }
-    .prb-conflict { background: var(--bgColor-danger-muted, #ffebe9); border-color: var(--borderColor-danger-muted, #ff818266); color: var(--fgColor-danger, #d1242f); }
-    .prb-failing  { background: var(--bgColor-danger-muted, #ffebe9); border-color: var(--borderColor-danger-muted, #ff818266); color: var(--fgColor-danger, #d1242f); }
+    .prb-conflict, .prb-failing { background: var(--bgColor-danger-muted, #ffebe9); border-color: var(--borderColor-danger-muted, #ff818266); color: var(--fgColor-danger, #d1242f); }
     .prb-release  { background: var(--bgColor-done-muted, #fbefff); border-color: var(--borderColor-done-muted, #c297ff); color: var(--fgColor-done, #8250df); }
     .prb-blue     { background: var(--bgColor-accent-muted, #ddf4ff); border-color: var(--borderColor-accent-muted, #54aeff66); color: var(--fgColor-accent, #0969da); }
     .prb-running  { background: var(--bgColor-default, #fff); border-color: var(--borderColor-attention-emphasis, #d4a72c); color: var(--fgColor-attention, #9a6700); }
@@ -270,13 +269,10 @@
     .prb-review-counts .chg { color: var(--fgColor-danger, #d1242f); }
     .prb-review-counts > span { display: inline-flex; align-items: center; gap: 3px; }
     .prb-review-counts svg { width: 14px; height: 14px; fill: currentColor; }
-    .prb-review-counts .rereq svg { width: 16px; height: 16px; }
-    .prb-review-counts .rereq circle { fill: var(--bgColor-accent-emphasis, #0969da); }
-    .prb-review-counts .rereq path { fill: var(--fgColor-onEmphasis, #fff); }
     .prb-review-counts .waiting { color: var(--fgColor-accent, #0969da); font-weight: 600; }
-    .prb-review-counts .waiting svg { width: 16px; height: 16px; }
-    .prb-review-counts .waiting circle { fill: var(--bgColor-accent-emphasis, #0969da); }
-    .prb-review-counts .waiting path { fill: var(--fgColor-onEmphasis, #fff); }
+    .prb-review-counts :is(.rereq, .waiting) svg { width: 16px; height: 16px; }
+    .prb-review-counts :is(.rereq, .waiting) circle { fill: var(--bgColor-accent-emphasis, #0969da); }
+    .prb-review-counts :is(.rereq, .waiting) path { fill: var(--fgColor-onEmphasis, #fff); }
     .prb-error { color: var(--fgColor-muted, #59636e); font-size: 14px; line-height: 18px; cursor: help; }
     .prb-status { margin-left: auto; text-align: right; font-size: 12px; color: var(--fgColor-attention, #9a6700); }
     .prb-status:empty { display: none; }
@@ -359,21 +355,11 @@
     );
   }
 
+  // GitHub inserts the review decision a few seconds after the rows, which reruns highlight().
   function isApproved(row) {
-    // Old experience: text like "Approved" often sits in a span near the status area
-    const reviewIcon = row.querySelector(
-      '[data-testid="review-decision-icon"]',
-    );
-    if (reviewIcon?.textContent.includes("Approved")) return true;
-
-    // Fallback: search any element with an aria-label mentioning Approved,
-    // or plain text "Approved" inside the row (old UI sometimes just has a label/span)
-    const ariaMatch = row.querySelector('[aria-label*="Approved"]');
-    if (ariaMatch) return true;
-
-    return Array.from(row.querySelectorAll("span, div")).some(
-      (el) => el.textContent.trim() === "Approved",
-    );
+    return !!row
+      .querySelector('[data-testid="review-decision-icon"]')
+      ?.textContent.includes("Approved");
   }
 
   // The row's first icon is its state: open, draft, merged, or closed.
@@ -539,6 +525,9 @@
     const pending = schedule(load);
     pending.catch(() => {
       if (cache.get(prPath)?.pending === pending) cache.delete(prPath);
+    });
+    cache.forEach((old, path) => {
+      if (Date.now() - old.at >= CACHE_TTL_MS) cache.delete(path);
     });
     cache.set(prPath, { pending, at: Date.now() });
     return pending;
@@ -870,9 +859,11 @@
   // Every row gets the second line, even when empty, so the comment count always sits level with the
   // title and the column keeps one width down the list.
   function reviewSlot(row) {
-    const metadata = [...row.children].find((el) =>
-      getComputedStyle(el).gridArea.includes("metadata"),
-    );
+    const metadata =
+      row.querySelector(":scope > .prb-meta-stack") ??
+      [...row.children].find((el) =>
+        getComputedStyle(el).gridArea.includes("metadata"),
+      );
     if (!metadata) return null;
     let slot = metadata.querySelector(":scope > .prb-reviews");
     if (!slot) {
@@ -1109,9 +1100,9 @@
       .filter(Boolean);
   }
 
-  function pageAuthors() {
+  function pageAuthors(rows = listRows()) {
     const authors = new Map();
-    listRows().forEach((row) => {
+    rows.forEach((row) => {
       rowAuthors(row).forEach(({ login, label }) => {
         const key = login.toLowerCase();
         if (!authors.has(key)) authors.set(key, label);
@@ -1120,8 +1111,8 @@
     return authors;
   }
 
-  function authorSignature() {
-    return [...pageAuthors()].join("|");
+  function authorSignature(rows) {
+    return [...pageAuthors(rows)].join("|");
   }
 
   function segmented(current, options, onSelect) {
@@ -1439,7 +1430,7 @@
     const titleContainer = titleHeading(link)?.parentElement;
     if (!titleContainer) return;
 
-    const prPath = new URL(link.href).pathname;
+    const prPath = link.pathname;
     if (!/^\/[^/]+\/[^/]+\/pull\/\d+$/.test(prPath)) return;
     const existing = titleContainer.querySelector(":scope > .prb-group");
     if (existing?.dataset.prPath === prPath) {
@@ -1599,8 +1590,8 @@
   }
 
   // Keys shared by several rows get a color, in order of first appearance. Single keys stay neutral.
-  function applyTicketKeys() {
-    const rows = listRows().map((row) => {
+  function applyTicketKeys(rowElements) {
+    const rows = rowElements.map((row) => {
       const link = titleLink(row);
       return {
         row,
@@ -1624,7 +1615,7 @@
     rows.forEach(({ link, key }) => {
       if (!key) return;
       if (!owners.has(key)) owners.set(key, new Set());
-      owners.get(key).add(new URL(link.href).pathname.split("/")[1]);
+      owners.get(key).add(link.pathname.split("/")[1]);
     });
 
     rows.forEach(({ row, link, key }) => {
@@ -1707,7 +1698,7 @@
     return { up: arrow("up"), down: arrow("down") };
   }
 
-  // Arrow text changes are DOM mutations, which rerun highlight(), so only write what changed.
+  // Runs on every scrolled frame while a key is hovered, so only write what changed.
   function setArrow(arrow, count, symbol) {
     if (arrow.hidden !== !count) arrow.hidden = !count;
     if (!count) return;
@@ -1748,17 +1739,17 @@
     },
     { passive: true },
   );
-  window.addEventListener(
-    "scroll",
-    () => activeTicket.key && updateTicketArrows(),
-    {
-      passive: true,
-    },
-  );
-  window.addEventListener(
-    "resize",
-    () => activeTicket.key && updateTicketArrows(),
-  );
+  let arrowsQueued = false;
+  function queueTicketArrows() {
+    if (!activeTicket.key || arrowsQueued) return;
+    arrowsQueued = true;
+    requestAnimationFrame(() => {
+      arrowsQueued = false;
+      if (activeTicket.key) updateTicketArrows();
+    });
+  }
+  window.addEventListener("scroll", queueTicketArrows, { passive: true });
+  window.addEventListener("resize", queueTicketArrows);
 
   // Opening a PR from the list is a full page load, and Back can restore the frozen list from the
   // browser's back-forward cache without rerunning anything, so refresh the PRs opened from here.
@@ -1769,7 +1760,7 @@
       const link = event.target.closest?.(
         'a[data-testid="listitem-title-link"]',
       );
-      if (link) openedPrs.add(new URL(link.href).pathname);
+      if (link) openedPrs.add(link.pathname);
     },
     true,
   );
@@ -1795,29 +1786,22 @@
       return;
     }
 
-    // Old experience: rows identified by [data-id]
-    document.querySelectorAll("[data-id]").forEach((row) => {
-      const timeEl = row.querySelector("relative-time, time");
-      if (timeEl) applyHighlight(row, timeEl);
-    });
-
     // New preview experience: rows are <li> ancestors of the timestamp container.
     // We use the first relative-time in the container, which is the "opened" date.
-    document
-      .querySelectorAll('[data-testid="timestamp-container"]')
-      .forEach((container) => {
-        const timeEl = container.querySelector("relative-time");
-        if (!timeEl) return;
-        const row = container.closest("li");
-        if (!row) return;
-        applyHighlight(row, timeEl);
-        applyAuthorHighlight(row);
-        addBadges(row);
-      });
-    applyTicketKeys();
+    const rows = listRows();
+    rows.forEach((row) => {
+      const timeEl = row.querySelector(
+        '[data-testid="timestamp-container"] relative-time',
+      );
+      if (!timeEl) return;
+      applyHighlight(row, timeEl);
+      applyAuthorHighlight(row);
+      addBadges(row);
+    });
+    applyTicketKeys(rows);
     addFooter();
-    // Runs on every DOM change, so the author list rebuilds only when the page's authors change.
-    if (renderedAuthors !== authorSignature()) renderPanel();
+    // Runs on every change GitHub makes, so the author list rebuilds only when the page's authors change.
+    if (renderedAuthors !== authorSignature(rows)) renderPanel();
   }
 
   let highlightQueued = false;
@@ -1838,8 +1822,25 @@
     applySettings({ features: JSON.stringify(settings.features) !== before });
   });
 
+  // The script's own renders would otherwise rerun highlight() after every badge update. Removals
+  // always count, since that's how a GitHub redraw that drops the badges shows up.
+  const OWN_NODES =
+    ".prb-group, .prb-reviews, .prb-ticket, .prb-tg-arrow, #prb-footer";
+  function isOwnNode(node) {
+    const el = node.nodeType === Node.ELEMENT_NODE ? node : node.parentElement;
+    return !!el?.closest(OWN_NODES);
+  }
+  function isOwnMutation(record) {
+    if (isOwnNode(record.target)) return true;
+    return (
+      !record.removedNodes.length && [...record.addedNodes].every(isOwnNode)
+    );
+  }
+
   highlight();
-  new MutationObserver(queueHighlight).observe(document.body, {
+  new MutationObserver((records) => {
+    if (!records.every(isOwnMutation)) queueHighlight();
+  }).observe(document.body, {
     childList: true,
     subtree: true,
   });

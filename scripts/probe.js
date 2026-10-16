@@ -161,16 +161,26 @@
     JSON.stringify(counts),
   );
 
-  const decisions = rows.filter((row) =>
-    row.querySelector('[data-testid="review-decision-icon"]'),
-  ).length;
-  (decisions ? pass : skip)(
-    "page",
-    "Review decision icon",
-    decisions
-      ? `${decisions} rows`
-      : "No rows with a review decision on this page",
-  );
+  // GitHub inserts the review decisions several seconds after the rows.
+  const decisionIcons = () =>
+    rows
+      .map((row) => row.querySelector('[data-testid="review-decision-icon"]'))
+      .filter(Boolean);
+  for (let i = 0; i < 20 && !decisionIcons().length; i++)
+    await new Promise((resolve) => setTimeout(resolve, 500));
+  const decisions = decisionIcons();
+  const decisionTexts = [
+    ...new Set(decisions.map((icon) => icon.textContent.replace(/^·/, ""))),
+  ];
+  if (!decisions.length)
+    skip("page", "Review decision icon", "None appeared within 10 seconds");
+  else
+    expect(
+      "page",
+      "Review decision icon reads Approved or Review required",
+      decisionTexts.some((t) => /Approved|Review required/.test(t)),
+      `${decisions.length} rows: ${decisionTexts.join(", ")}`,
+    );
 
   const openRow = rows[states.indexOf("open")];
   if (!openRow) {

@@ -114,8 +114,7 @@
   .prb-size .del { color: var(--fgColor-danger, #d1242f); }
   .prb-ready    { background: var(--bgColor-success-emphasis, #1a7f37); color: var(--fgColor-onEmphasis, #fff); }
   .prb-behind   { background: var(--bgColor-attention-muted, #fff8c5); border-color: var(--borderColor-attention-emphasis, #d4a72c); color: var(--fgColor-attention, #9a6700); }
-  .prb-conflict { background: var(--bgColor-danger-muted, #ffebe9); border-color: var(--borderColor-danger-muted, #ff818266); color: var(--fgColor-danger, #d1242f); }
-  .prb-failing  { background: var(--bgColor-danger-muted, #ffebe9); border-color: var(--borderColor-danger-muted, #ff818266); color: var(--fgColor-danger, #d1242f); }
+  .prb-conflict, .prb-failing { background: var(--bgColor-danger-muted, #ffebe9); border-color: var(--borderColor-danger-muted, #ff818266); color: var(--fgColor-danger, #d1242f); }
   .prb-release  { background: var(--bgColor-done-muted, #fbefff); border-color: var(--borderColor-done-muted, #c297ff); color: var(--fgColor-done, #8250df); }
   .prb-blue     { background: var(--bgColor-accent-muted, #ddf4ff); border-color: var(--borderColor-accent-muted, #54aeff66); color: var(--fgColor-accent, #0969da); }
   .prb-running  { background: var(--bgColor-default, #fff); border-color: var(--borderColor-attention-emphasis, #d4a72c); color: var(--fgColor-attention, #9a6700); }
@@ -137,13 +136,10 @@
   .prb-review-counts .chg { color: var(--fgColor-danger, #d1242f); }
   .prb-review-counts > span { display: inline-flex; align-items: center; gap: 3px; }
   .prb-review-counts svg { width: 14px; height: 14px; fill: currentColor; }
-  .prb-review-counts .rereq svg { width: 16px; height: 16px; }
-  .prb-review-counts .rereq circle { fill: var(--bgColor-accent-emphasis, #0969da); }
-  .prb-review-counts .rereq path { fill: var(--fgColor-onEmphasis, #fff); }
   .prb-review-counts .waiting { color: var(--fgColor-accent, #0969da); font-weight: 600; }
-  .prb-review-counts .waiting svg { width: 16px; height: 16px; }
-  .prb-review-counts .waiting circle { fill: var(--bgColor-accent-emphasis, #0969da); }
-  .prb-review-counts .waiting path { fill: var(--fgColor-onEmphasis, #fff); }
+  .prb-review-counts :is(.rereq, .waiting) svg { width: 16px; height: 16px; }
+  .prb-review-counts :is(.rereq, .waiting) circle { fill: var(--bgColor-accent-emphasis, #0969da); }
+  .prb-review-counts :is(.rereq, .waiting) path { fill: var(--fgColor-onEmphasis, #fff); }
   .prb-error { color: var(--fgColor-muted, #59636e); font-size: 14px; line-height: 18px; cursor: help; }
   .prb-status { margin-left: auto; text-align: right; font-size: 12px; color: var(--fgColor-attention, #9a6700); }
   .prb-status:empty { display: none; }

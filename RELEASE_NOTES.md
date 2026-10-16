@@ -1,5 +1,9 @@
 # Release Notes
 
+## 1.5.1
+
+- **Faster lists.** The script reprocesses the list only when GitHub changes it, no longer after each of its own badge updates. Approval is read from GitHub's review status alone, without scanning each row's text, and rows still turn green as soon as GitHub shows the approval. Badges and colors are unchanged.
+
 ## 1.5
 
 - **Related tickets.** Ticket keys in PR titles, such as `PAY-2210`, `pay_2210`, or `Feature/pay 2210`, show as a pill before the title. Turn it off with **Related tickets** in the settings panel.

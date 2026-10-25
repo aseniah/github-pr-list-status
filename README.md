@@ -21,6 +21,7 @@ Works on GitHub's global pull request list at `github.com/pulls` (Authored by me
 - **Live while checks run.** PRs showing **● Checking…** refresh themselves once a minute until their checks finish or GitHub settles their merge state.
 - **Deploy gates.** A failing check you name, such as a release lock, gets its own badge instead of counting as a failure. See [Configuration](#configuration).
 - **Settings panel.** Click **Settings** below the list to choose highlighted authors and turn individual features on or off. **Fewer requests** turns off the features that cost extra requests, so badges load sooner and long lists are less likely to hit GitHub's rate limit. **Enable all** turns everything back on. Your choices are saved in the browser and survive updates.
+- **Inbox zero, celebrated.** Clear every PR waiting on your review, then look at the list again. Turn it off with **Celebrate an empty PR list 🎉** in the settings panel.
 - **Built-in legend.** Click **Legend** below the list to see what each row color, badge, and review count means.
 - **Light and dark mode.** Colors come from GitHub's own theme.
 - **No token or setup.** It uses your existing GitHub login and only ever shows PRs you already have access to.

@@ -44,13 +44,39 @@
   ]
     .map((container) => container.closest("li"))
     .filter(Boolean);
+  // The celebration reads the submitted query and count from the selected Open/Closed tab.
+  const tab = document.querySelector('a[aria-current="true"][href*="q="]');
+  const tabQuery = tab && new URL(tab.href).searchParams.get("q");
   expect(
     "page",
-    "Rows via timestamp-container > li",
-    rows.length > 0,
-    `${rows.length} rows`,
+    'Selected tab a[aria-current="true"] with q and "(N)"',
+    !!tabQuery && /\(\d[\d,]*\)\s*$/.test(tab.textContent),
+    tab ? `${tab.textContent.trim()} · ${tabQuery}` : "no selected tab",
   );
-  if (!rows.length) return done();
+
+  if (!rows.length) {
+    skip("page", "Rows via timestamp-container > li", "empty list");
+    const blankslate = document.querySelector('[data-component="Blankslate"]');
+    expect(
+      "page",
+      'Empty list shows [data-component="Blankslate"] in the list',
+      !!blankslate?.closest("ul"),
+      blankslate ? "" : "not found",
+    );
+    expect(
+      "page",
+      'Empty list\'s tab ends in "(0)"',
+      !!tab && /\(0\)\s*$/.test(tab.textContent),
+      tab?.textContent.trim() ?? "",
+    );
+    return done();
+  }
+  pass("page", "Rows via timestamp-container > li", `${rows.length} rows`);
+  skip(
+    "page",
+    'Empty list shows [data-component="Blankslate"] in the list',
+    "list has PRs",
+  );
 
   const links = rows.map((row) =>
     row.querySelector('a[data-testid="listitem-title-link"]'),

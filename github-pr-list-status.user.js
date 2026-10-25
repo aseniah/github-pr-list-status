@@ -2,7 +2,7 @@
 // @name        GitHub PR List Status
 // @namespace   https://github.com/aseniah
 // @description Colors PRs by age and approval, and adds merge state and line count badges to the pull requests list
-// @version     1.5.1
+// @version     1.6
 // @license     MIT
 // @updateURL   https://raw.githubusercontent.com/aseniah/github-pr-list-status/main/github-pr-list-status.user.js
 // @downloadURL https://raw.githubusercontent.com/aseniah/github-pr-list-status/main/github-pr-list-status.user.js
@@ -116,6 +116,12 @@
       description: "On your PRs only. 1 request per PR with comments.",
       default: CONFIG.flagWaitingThreads,
     },
+    {
+      key: "celebration",
+      label: "Celebrate an empty PR list 🎉",
+      description: "A surprise when no PRs are waiting on your review.",
+      default: true,
+    },
   ];
   const FEWER_REQUESTS_OFF = new Set([
     "checks",
@@ -182,6 +188,7 @@
         f.key !== "waitingThreads" &&
         f.key !== "excludeLockfiles" &&
         f.key !== "ticketGroups" &&
+        f.key !== "celebration" &&
         settings.features[f.key] &&
         !info.features?.[f.key],
     );
@@ -846,14 +853,21 @@
     return octicon(DISCUSSION_ICON_PATH);
   }
 
+  const SVG_NS = "http://www.w3.org/2000/svg";
+  function svgNode(tag, attrs = {}, ...children) {
+    const node = document.createElementNS(SVG_NS, tag);
+    for (const [name, value] of Object.entries(attrs))
+      node.setAttribute(name, value);
+    node.append(...children);
+    return node;
+  }
+
   function octicon(iconPath) {
-    const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
-    svg.setAttribute("viewBox", "0 0 16 16");
-    svg.setAttribute("aria-hidden", "true");
-    const path = document.createElementNS("http://www.w3.org/2000/svg", "path");
-    path.setAttribute("d", iconPath);
-    svg.append(path);
-    return svg;
+    return svgNode(
+      "svg",
+      { viewBox: "0 0 16 16", "aria-hidden": "true" },
+      svgNode("path", { d: iconPath }),
+    );
   }
 
   // Every row gets the second line, even when empty, so the comment count always sits level with the
@@ -905,12 +919,16 @@
     );
   }
 
-  function ensureStyles() {
-    if (document.getElementById("prb-styles")) return;
+  function injectStyles(id, css) {
+    if (document.getElementById(id)) return;
     const style = document.createElement("style");
-    style.id = "prb-styles";
-    style.textContent = BADGE_CSS;
+    style.id = id;
+    style.textContent = css;
     document.head.appendChild(style);
+  }
+
+  function ensureStyles() {
+    injectStyles("prb-styles", BADGE_CSS);
   }
 
   function ageRangeLabel(fromDays, toDays) {
@@ -1304,8 +1322,11 @@
   }
 
   function addFooter() {
+    // An empty list has no rows, but its empty state sits in the same list, so the panel stays reachable.
     const list = document
-      .querySelector('[data-testid="timestamp-container"]')
+      .querySelector(
+        '[data-testid="timestamp-container"], [data-component="Blankslate"]',
+      )
       ?.closest("ul")?.parentElement;
     if (!list || list.nextElementSibling?.id === "prb-footer") return;
     document.getElementById("prb-footer")?.remove();
@@ -1772,6 +1793,1523 @@
     openedPrs.clear();
   });
 
+  // ---------- Empty list celebration ----------
+  // When a list of PRs waiting on the viewer comes back empty, a small looping animation takes the
+  // place of GitHub's "No pull requests matched your search". Each visit picks one effect at random,
+  // dressed for the season. Everything runs on CSS transforms and opacity plus a few timers, and
+  // stops itself once the element leaves the page.
+
+  const PULL_REQUEST_ICON_PATH =
+    "M1.5 3.25a2.25 2.25 0 1 1 3 2.122v5.256a2.251 2.251 0 1 1-1.5 0V5.372A2.25 2.25 0 0 1 1.5 3.25Zm5.677-.177L9.573.677A.25.25 0 0 1 10 .854V2.5h1A2.5 2.5 0 0 1 13.5 5v5.628a2.251 2.251 0 1 1-1.5 0V5a1 1 0 0 0-1-1h-1v1.646a.25.25 0 0 1-.427.177L7.177 3.427a.25.25 0 0 1 0-.354ZM3.75 2.5a.75.75 0 1 0 0 1.5.75.75 0 0 0 0-1.5Zm0 9.5a.75.75 0 1 0 0 1.5.75.75 0 0 0 0-1.5Zm8.25.75a.75.75 0 1 0 1.5 0 .75.75 0 0 0-1.5 0Z";
+
+  // Inclusive [month, day] ranges. Dates outside all of them get the base versions.
+  const CELEBRATION_SEASONS = [
+    ["halloween", [10, 1], [10, 31]],
+    ["thanksgiving", [11, 1], [11, 30]],
+    ["winter", [12, 1], [12, 31]],
+    ["newyear", [1, 1], [1, 7]],
+    ["valentine", [2, 1], [2, 14]],
+    ["stpatrick", [3, 10], [3, 17]],
+    ["summer", [6, 21], [8, 31]],
+  ];
+
+  function celebrationSeason(date) {
+    const day = (date.getMonth() + 1) * 100 + date.getDate();
+    const match = CELEBRATION_SEASONS.find(
+      ([, [fromMonth, fromDay], [toMonth, toDay]]) =>
+        day >= fromMonth * 100 + fromDay && day <= toMonth * 100 + toDay,
+    );
+    return match ? match[0] : "base";
+  }
+
+  // The year being celebrated: this one during the New Year window, otherwise the one coming up.
+  function celebratedYear(date) {
+    return date.getMonth() === 0 ? date.getFullYear() : date.getFullYear() + 1;
+  }
+
+  // An empty result on these means nothing is waiting on you. author:@me alone doesn't count.
+  const WAITING_QUALIFIERS = [
+    "review-requested",
+    "user-review-requested",
+    "assignee",
+    "involves",
+    "mentions",
+  ];
+
+  // Token-based, so negated (-assignee:@me) and quoted qualifiers don't count, and any closed or
+  // merged state rules the list out.
+  function isWaitingQuery(query) {
+    const tokens = query.replace(/"[^"]*"/g, " ").split(/\s+/);
+    const has = (...wanted) => tokens.some((token) => wanted.includes(token));
+    return (
+      has("is:open", "state:open") &&
+      !has("is:closed", "is:merged", "state:closed") &&
+      has(...WAITING_QUALIFIERS.map((name) => `${name}:@me`))
+    );
+  }
+
+  // Shared colors, so a season looks the same across effects.
+  const HUE = {
+    gold: "#f5c518",
+    amber: "#9a6700",
+    orange: "#f0883e",
+    rust: "#bc4c00",
+    red: "#cf222e",
+    coral: "#ff7b72",
+    pink: "#e85aad",
+    rose: "#ff9ccb",
+    purple: "#a371f7",
+    violet: "#6639ba",
+    blue: "#4493f8",
+    teal: "#00b4d8",
+    green: "#1a7f37",
+    lime: "#3fb950",
+    white: "#f6f8fa",
+    cream: "#fff8c5",
+    ink: "#1f2328",
+    slate: "#57606a",
+    crust: "#d6a15f",
+    bake: "#a8672f",
+  };
+  const RAINBOW = [
+    "#da3633",
+    HUE.orange,
+    HUE.gold,
+    HUE.green,
+    "#0969da",
+    "#8250df",
+  ];
+
+  const GIFT_ROWS = [
+    "............",
+    "............",
+    "............",
+    "...rr..rr...",
+    "....rrrr....",
+    "gggggrrggggg",
+    "gggggrrggggg",
+    ".GGGGrrGGGG.",
+    ".GGGGrrGGGG.",
+    ".GGGGrrGGGG.",
+    ".GGGGrrGGGG.",
+    ".GGGGrrGGGG.",
+    ".GGGGrrGGGG.",
+  ];
+  const GIFT_PAL = { g: "#2da44e", G: HUE.green, r: HUE.red, y: HUE.gold };
+
+  // Pixel art: each string is a row and each character a pixel colored from the palette. Characters
+  // missing from the palette are transparent. Effects can swap rows or colors per season.
+  const SPRITES = {
+    heart: [
+      [".pp.pp.", "ppppppp", "ppppppp", ".ppppp.", "..ppp..", "...p..."],
+      { p: HUE.pink },
+    ],
+    pumpkin: [
+      [
+        "....g....",
+        "...g.....",
+        ".ooooooo.",
+        "ooyoooyoo",
+        "ooooooooo",
+        "ooyyyyyoo",
+        "oooyoyooo",
+        ".ooooooo.",
+      ],
+      { g: HUE.green, o: HUE.orange, y: HUE.gold },
+    ],
+    pie: [
+      [
+        ".....ww.....",
+        "...cccccc...",
+        "..cPPPPPPc..",
+        ".cPPPPPPPPc.",
+        "cccccccccccc",
+        "cCCCCCCCCCCc",
+        ".cCCCCCCCCc.",
+      ],
+      { w: HUE.white, c: HUE.crust, P: "#e07b2a", C: HUE.bake },
+    ],
+    ornament: [
+      [
+        "...y...",
+        "..yyy..",
+        ".rrrrr.",
+        "rrwrrrr",
+        "rrrrrrr",
+        "rrrrrrr",
+        ".rrrrr.",
+        "..rrr..",
+      ],
+      { r: HUE.red, y: HUE.gold, w: "#fff" },
+    ],
+    star: [
+      [
+        "...y...",
+        "...y...",
+        "yyyyyyy",
+        ".yyyyy.",
+        "..yyy..",
+        ".yy.yy.",
+        "y.....y",
+      ],
+      { y: HUE.gold },
+    ],
+    coin: [
+      [".yyyy.", "ywyyyd", "ywyyyd", "yyyyyd", ".dddd."],
+      { y: HUE.gold, w: HUE.cream, d: HUE.amber },
+    ],
+    clover: [
+      [
+        "..gg.gg..",
+        ".ggggggg.",
+        "..ggggg..",
+        "gg..g..gg",
+        "ggggggggg",
+        ".gg.g.gg.",
+        "....g....",
+        "...g.....",
+      ],
+      { g: HUE.green },
+    ],
+    melon: [
+      ["rrrrrrrrr", "grkrrrkrg", ".grrkrrg.", "..ggggg.."],
+      { r: "#f85149", k: HUE.ink, g: HUE.green },
+    ],
+    invader: [
+      [
+        "..a.....a..",
+        "...a...a...",
+        "..aaaaaaa..",
+        ".aa.aaa.aa.",
+        "aaaaaaaaaaa",
+        "a.aaaaaaa.a",
+        "a.a.....a.a",
+        "...aa.aa...",
+      ],
+      { a: "var(--fgColor-success, #1a7f37)" },
+    ],
+    ship: [
+      ["....a....", "...aaa...", ".aaaaaaa.", "aaaaaaaaa", "aaaaaaaaa"],
+      { a: "var(--fgColor-accent, #0969da)" },
+    ],
+    ghost: [
+      [
+        "..rrrr..",
+        ".rrrrrr.",
+        "rwwrrwwr",
+        "rwbrrwbr",
+        "rrrrrrrr",
+        "rrrrrrrr",
+        "rrrrrrrr",
+        "rr.rr.rr",
+      ],
+      { r: HUE.orange, w: "#fff", b: "#0969da" },
+    ],
+    trophy: [
+      [
+        "..yyyyyyyy..",
+        "yyyyyyyyyyyy",
+        "y.ywyyyyyy.y",
+        "y.ywyyyyyy.y",
+        ".yywyyyyyyy.",
+        "..yyyyyyyy..",
+        "...yyyyyy...",
+        ".....yy.....",
+        ".....yy.....",
+        "....dddd....",
+        "...dddddd...",
+      ],
+      { y: HUE.gold, w: HUE.cream, d: HUE.amber },
+    ],
+    giftClosed: [GIFT_ROWS, GIFT_PAL],
+    // Opening lifts the bow and lid three rows and shows the gold inside.
+    giftOpen: [
+      [
+        ...GIFT_ROWS.slice(3, 7),
+        "............",
+        "............",
+        ".yyyyyyyyyy.",
+        ...GIFT_ROWS.slice(7),
+      ],
+      GIFT_PAL,
+    ],
+    pot: [
+      [
+        "..yyyyyyyy..",
+        ".yywyyyywyy.",
+        "kkkkkkkkkkkk",
+        ".kKKKKKKKKk.",
+        "kKKKKKKKKKKk",
+        "kKKKKKKKKKKk",
+        "kKKKKKKKKKKk",
+        ".kKKKKKKKKk.",
+        "..kkkkkkkk..",
+      ],
+      { y: HUE.gold, w: HUE.cream, k: HUE.ink, K: HUE.slate },
+    ],
+    iceCream: [
+      [
+        "..ppp..",
+        ".ppwpp.",
+        "ppppppp",
+        "ccccccc",
+        ".cCcCc.",
+        ".ccccc.",
+        "..cCc..",
+        "..ccc..",
+        "...c...",
+      ],
+      { p: HUE.rose, w: "#fff", c: HUE.crust, C: HUE.bake },
+    ],
+    mug: [
+      [
+        "nnnnnnnnnn...",
+        "mmmmmmmmmmmm.",
+        "mmmmmmmmmm..m",
+        "mmmmmmmmmm..m",
+        "mmmmmmmmmm..m",
+        "mmmmmmmmmmmm.",
+        "mmmmmmmmmm...",
+        ".mmmmmmmm....",
+      ],
+      { m: HUE.blue, n: "#6f4e37" },
+    ],
+    cauldron: [
+      [
+        ".gggggggggg.",
+        "kkkkkkkkkkkk",
+        ".kkkkkkkkkk.",
+        "kkkkkkkkkkkk",
+        "kkkkkkkkkkkk",
+        "kkkkkkkkkkkk",
+        ".kkkkkkkkkk.",
+        "..k......k..",
+      ],
+      { g: HUE.lime, k: HUE.slate },
+    ],
+    lemonade: [
+      [
+        "..ppp.....s",
+        ".ppppp...s.",
+        "ppppppp.s..",
+        "...k...s...",
+        "gggkgggsggg",
+        "gYYkYYYsYYg",
+        "gYYYYYYYYYg",
+        "gYwwYYYYYYg",
+        "gYwwYYYwwYg",
+        "gYYYYYYwwYg",
+        "gYYYYYYYYYg",
+        "gYYYYYYYYYg",
+        ".ggggggggg.",
+      ],
+      {
+        p: HUE.pink,
+        s: HUE.red,
+        k: "#8a5a2b",
+        g: "#afb8c1",
+        Y: "#f7e463",
+        w: "#fff",
+      },
+    ],
+    flute: [
+      [
+        "g.....g",
+        "gYYYYYg",
+        "gYwYYYg",
+        "gYYYwYg",
+        "gYYYYYg",
+        ".gYYYg.",
+        "..gYg..",
+        "...g...",
+        "...g...",
+        "...g...",
+        ".ggggg.",
+      ],
+      { g: "#afb8c1", Y: "#f5d76e", w: HUE.cream },
+    ],
+    cat: [
+      [
+        ".............",
+        ".............",
+        ".............",
+        "..o......o...",
+        "..oo....oo...",
+        "..ooossooo...",
+        "..oeooooeo...",
+        "..oeooooeo...",
+        "..ooooppoo...",
+        "...oooooo....",
+        "...oooooo...o",
+        "...oossoo...o",
+        "...oooooo.oo.",
+        "...oo..oo....",
+        "...oo..oo....",
+      ],
+      {
+        o: "#e8833a",
+        s: "#a8521a",
+        e: HUE.ink,
+        p: "#f2a1b5",
+        h: HUE.violet,
+        b: HUE.orange,
+        W: HUE.white,
+        R: HUE.red,
+        K: "#2d333b",
+        Y: HUE.gold,
+        G: HUE.green,
+        g: "#116329",
+        P: "#ff7eb6",
+        M: "#d63384",
+        C: HUE.blue,
+      },
+    ],
+  };
+
+  function sprite(name, scale, { rows, pal, cls = "" } = {}) {
+    const [defaultRows, defaultPal] = SPRITES[name];
+    const grid = rows ?? defaultRows;
+    const colors = { ...defaultPal, ...pal };
+    const width = Math.max(...grid.map((row) => row.length));
+    const svg = svgNode("svg", {
+      viewBox: `0 0 ${width} ${grid.length}`,
+      width: width * scale,
+      height: grid.length * scale,
+      class: `prb-cel-px ${cls}`,
+      "aria-hidden": "true",
+    });
+    grid.forEach((row, y) => {
+      // Neighboring pixels of one color share a rect, which keeps the node count down.
+      for (let x = 0; x < row.length; ) {
+        let end = x + 1;
+        while (row[end] === row[x]) end++;
+        const color = colors[row[x]];
+        if (color) {
+          const rect = svgNode("rect", {
+            x,
+            y,
+            width: end - x + 0.02,
+            height: 1.02,
+          });
+          rect.style.fill = color;
+          svg.append(rect);
+        }
+        x = end;
+      }
+    });
+    return svg;
+  }
+
+  // Applies [row, column, character] changes to a sprite's rows, for outfits and decorations.
+  function withPixels(rows, pixels) {
+    const grid = rows.map((row) => [...row]);
+    pixels.forEach(([r, c, ch]) => {
+      grid[r][c] = ch;
+    });
+    return grid.map((row) => row.join(""));
+  }
+  const pixelRun = (r, from, to, ch) =>
+    Array.from({ length: to - from + 1 }, (_, i) => [r, from + i, ch]);
+  const pickOne = (list) => list[Math.floor(Math.random() * list.length)];
+
+  // ---------- Decorations shared by every effect ----------
+  // Positions are percentages of the decorated sprite, so one set fits sprites of any size.
+  const AROUND = [
+    [-30, 12, 0],
+    [108, 0, 0.7],
+    [-14, 68, 1.3],
+    [110, 52, 1],
+    [45, -22, 0.4],
+  ];
+
+  function placeAround(host, className, text, color, count = AROUND.length) {
+    AROUND.slice(0, count).forEach(([x, y, delay], i) => {
+      const node = element("span", {
+        className,
+        textContent: text[i % text.length],
+      });
+      Object.assign(node.style, {
+        left: `${x}%`,
+        top: `${y}%`,
+        animationDelay: `${delay}s`,
+        color,
+      });
+      host.append(node);
+    });
+  }
+
+  function steam(host, top) {
+    [15, 37, 58].forEach((x, i) => {
+      const svg = svgNode(
+        "svg",
+        {
+          width: 10,
+          height: 28,
+          viewBox: "0 0 10 28",
+          class: "prb-cel-steam",
+          "aria-hidden": "true",
+        },
+        svgNode("path", {
+          d: "M5 27C0 21 10 15 5 9 1 4 7 2 5 0",
+          fill: "none",
+          stroke: "currentColor",
+          "stroke-width": 2,
+          "stroke-linecap": "round",
+        }),
+      );
+      Object.assign(svg.style, {
+        left: `${x}%`,
+        top: `${top}px`,
+        animationDelay: `${i * 0.6}s`,
+      });
+      host.append(svg);
+    });
+  }
+
+  function bubbles(host, [color, top]) {
+    [
+      [17, 0],
+      [40, 0.5],
+      [62, 1],
+      [30, 1.3],
+      [78, 0.8],
+    ].forEach(([x, delay]) => {
+      const size = `${4 + Math.random() * 6}px`;
+      const node = element("i", { className: "prb-cel-bubble" });
+      Object.assign(node.style, {
+        left: `${x}%`,
+        top: `${top}px`,
+        width: size,
+        height: size,
+        background: color,
+        animationDelay: `${delay}s`,
+      });
+      host.append(node);
+    });
+  }
+
+  function fireworks(bg, colors) {
+    [
+      [22, 25, 0],
+      [72, 18, 0.6],
+      [50, 40, 1.2],
+      [88, 50, 0.3],
+      [10, 55, 0.9],
+    ].forEach(([x, y, delay], i) => {
+      const burst = element("div", { className: "prb-cel-fw" });
+      Object.assign(burst.style, {
+        left: `${x}%`,
+        top: `${y}%`,
+        color: colors[i % colors.length],
+      });
+      for (let k = 0; k < 12; k++) {
+        const spark = element("i");
+        spark.style.setProperty("--prb-a", `${k * 30}deg`);
+        spark.style.animationDelay = `${delay}s`;
+        burst.append(spark);
+      }
+      bg.append(burst);
+    });
+  }
+
+  // Falling or streaking things across the whole box.
+  const SKIES = {
+    streaks: [
+      22,
+      () => {
+        const node = element("i", { className: "prb-cel-streak" });
+        Object.assign(node.style, {
+          height: `${4 + Math.random() * 14}px`,
+          opacity: 0.35 + Math.random() * 0.6,
+          animationDuration: `${0.5 + Math.random() * 0.9}s`,
+        });
+        return node;
+      },
+    ],
+    hearts: [
+      18,
+      () => {
+        const node = element("i", {
+          className: "prb-cel-streak prb-cel-glyph",
+          textContent: "♥",
+        });
+        Object.assign(node.style, {
+          color: pickOne([HUE.pink, HUE.red, HUE.rose]),
+          animationDuration: `${0.6 + Math.random() * 0.9}s`,
+        });
+        return node;
+      },
+    ],
+    snow: [
+      34,
+      () => {
+        const size = `${3 + Math.random() * 4}px`;
+        const node = element("i", { className: "prb-cel-flake" });
+        Object.assign(node.style, {
+          width: size,
+          height: size,
+          animationDuration: `${2.5 + Math.random() * 2.5}s`,
+        });
+        return node;
+      },
+    ],
+    leaves: [
+      14,
+      () => {
+        const node = element("span", {
+          className: "prb-cel-drift",
+          textContent: pickOne(["🍂", "🍁"]),
+        });
+        node.style.animationDuration = `${2.5 + Math.random() * 2}s`;
+        return node;
+      },
+    ],
+  };
+
+  function sky(bg, name) {
+    const [count, make] = SKIES[name];
+    for (let i = 0; i < count; i++) {
+      const node = make();
+      node.style.left = `${Math.random() * 100}%`;
+      node.style.animationDelay = `${-Math.random() * 4}s`;
+      bg.append(node);
+    }
+  }
+
+  // Ghosts fade in and out, each one somewhere new every cycle.
+  function ghosts(bg) {
+    const place = (node) =>
+      Object.assign(node.style, {
+        left: `${5 + Math.random() * 85}%`,
+        top: `${5 + Math.random() * 60}%`,
+      });
+    for (let i = 0; i < 4; i++) {
+      const ghost = element("span", {
+        className: "prb-cel-spook",
+        textContent: "👻",
+      });
+      ghost.style.animationDelay = `${i * 0.7}s`;
+      place(ghost);
+      ghost.addEventListener("animationiteration", () => place(ghost));
+      bg.append(ghost);
+    }
+  }
+
+  // Options any effect's season entry can use: fireworks, steam, bubbles, rise, fall, and sparkle.
+  function decorate(host, bg, c) {
+    if (c.fireworks) fireworks(bg, c.fireworks);
+    if (c.steam != null) steam(host, c.steam);
+    if (c.bubbles) bubbles(host, c.bubbles);
+    if (c.rise) placeAround(host, "prb-cel-pt", c.rise[0], c.rise[1], 4);
+    if (c.fall)
+      placeAround(host, "prb-cel-pt prb-cel-down", c.fall[0], c.fall[1], 4);
+    if (c.sparkle) placeAround(host, "prb-cel-tw", "✦", c.sparkle);
+  }
+
+  // ---------- Effects ----------
+  // Each effect reads its season's entry. Every effect covers every season, plus base.
+
+  const CAT_ARMS = [
+    [
+      [6, 0, "o"],
+      [7, 1, "o"],
+      [8, 1, "o"],
+      [9, 2, "o"],
+      [10, 9, "o"],
+      [11, 9, "o"],
+    ],
+    [
+      [10, 2, "o"],
+      [11, 2, "o"],
+      [9, 9, "o"],
+      [8, 10, "o"],
+      [7, 10, "o"],
+      [6, 11, "o"],
+    ],
+  ];
+  const BRIMMED_HAT = (color) => [
+    ...pixelRun(0, 4, 7, color),
+    ...pixelRun(1, 4, 7, color),
+    [2, 4, "K"],
+    [2, 5, "Y"],
+    [2, 6, "Y"],
+    [2, 7, "K"],
+    ...pixelRun(3, 2, 9, color),
+  ];
+  const CAT = {
+    base: { rise: [["♪", "♫"], "var(--fgColor-accent, #0969da)"] },
+    halloween: {
+      gear: [
+        [0, 6, "h"],
+        [1, 5, "h"],
+        [1, 6, "h"],
+        [2, 5, "b"],
+        [2, 6, "b"],
+        [2, 7, "b"],
+        ...pixelRun(3, 1, 10, "h"),
+      ],
+      rise: [["🦇"]],
+    },
+    thanksgiving: { gear: BRIMMED_HAT("K"), fall: [["🍂", "🍁"]] },
+    winter: {
+      gear: [
+        [0, 8, "W"],
+        [1, 6, "R"],
+        [1, 7, "R"],
+        ...pixelRun(2, 4, 7, "R"),
+        ...pixelRun(3, 2, 9, "W"),
+        ...pixelRun(9, 3, 8, "R"),
+        [10, 4, "R"],
+        [11, 4, "R"],
+      ],
+      fall: [["❄\uFE0E"], "var(--prb-cel-snow)"],
+    },
+    newyear: {
+      gear: [
+        [0, 6, "Y"],
+        [1, 5, "M"],
+        [1, 6, "C"],
+        [2, 4, "C"],
+        [2, 5, "M"],
+        [2, 6, "C"],
+        [2, 7, "M"],
+      ],
+      rise: [["🎉", "✨"]],
+    },
+    valentine: {
+      gear: [
+        [8, 2, "P"],
+        [8, 9, "P"],
+      ],
+      rise: [["♥"], HUE.pink],
+    },
+    stpatrick: {
+      gear: [
+        ...BRIMMED_HAT("G"),
+        [9, 4, "G"],
+        [9, 5, "g"],
+        [9, 6, "g"],
+        [9, 7, "G"],
+      ],
+      rise: [["☘\uFE0E"], HUE.green],
+    },
+    summer: {
+      gear: [
+        ...pixelRun(6, 2, 9, "K"),
+        [7, 3, "K"],
+        [7, 4, "K"],
+        [7, 7, "K"],
+        [7, 8, "K"],
+      ],
+      rise: [["☀️", "🌴"]],
+    },
+  };
+
+  function catEffect(c, { anim, bg }) {
+    const wrap = element("div", { className: "prb-cel-wrap" });
+    const body = element("div", { className: "prb-cel-cat" });
+    CAT_ARMS.forEach((arms, i) => {
+      const rows = withPixels(SPRITES.cat[0], [...arms, ...(c.gear ?? [])]);
+      body.append(sprite("cat", 8, { rows, cls: `prb-cel-f${i + 1}` }));
+    });
+    wrap.append(body);
+    decorate(wrap, bg, c);
+    anim.append(wrap);
+  }
+
+  const ROCKET = {
+    base: { sky: "streaks" },
+    halloween: { sky: "streaks", moon: true, ghosts: true },
+    thanksgiving: { sky: "leaves" },
+    winter: { sky: "snow", stripe: true },
+    newyear: {
+      sky: "streaks",
+      fireworks: [HUE.gold, HUE.purple, HUE.lime, HUE.teal, HUE.orange],
+    },
+    valentine: { sky: "hearts" },
+    stpatrick: { sky: "streaks", trail: true, fins: HUE.green },
+    summer: {
+      sky: "streaks",
+      fireworks: [HUE.coral, HUE.gold, HUE.teal, HUE.orange],
+    },
+  };
+
+  function rocketEffect(c, { anim, bg }) {
+    const outline = { stroke: "#6e7681", "stroke-width": 1.2 };
+    const rocket = element(
+      "div",
+      { className: "prb-cel-rocket" },
+      svgNode(
+        "svg",
+        { viewBox: "0 0 40 80", width: 52, height: 104, "aria-hidden": "true" },
+        svgNode(
+          "g",
+          { class: "prb-cel-flame" },
+          svgNode("path", { d: "M13 50Q20 80 27 50Z", fill: HUE.orange }),
+          svgNode("path", { d: "M16 50Q20 68 24 50Z", fill: HUE.gold }),
+        ),
+        svgNode("path", {
+          d: "M10 36 2 56 10 50ZM30 36 38 56 30 50Z",
+          fill: c.fins ?? "#da3633",
+        }),
+        svgNode("path", {
+          d: "M20 3C28 13 30 28 30 47H10C10 28 12 13 20 3Z",
+          fill: "#e6edf3",
+          ...outline,
+        }),
+        ...(c.stripe
+          ? [svgNode("path", { d: "M10.6 33h18.8v4H10.4Z", fill: HUE.red })]
+          : []),
+        svgNode("circle", { cx: 20, cy: 25, r: 5, fill: HUE.blue, ...outline }),
+        svgNode("rect", {
+          x: 13,
+          y: 47,
+          width: 14,
+          height: 4,
+          rx: 1,
+          fill: "#6e7681",
+        }),
+      ),
+    );
+    if (c.trail) rocket.prepend(element("div", { className: "prb-cel-trail" }));
+    anim.append(rocket);
+    if (c.moon) bg.append(element("div", { className: "prb-cel-moon" }));
+    if (c.ghosts) ghosts(bg);
+    sky(bg, c.sky);
+    decorate(rocket, bg, c);
+  }
+
+  const ORNAMENT_PALS = [HUE.red, HUE.green, HUE.blue].map((r) => ({ r }));
+  const STAR_PALS = [HUE.gold, HUE.purple, HUE.teal, HUE.orange].map((y) => ({
+    y,
+  }));
+  const HEART_PALS = [HUE.pink, HUE.red, HUE.rose].map((p) => ({ p }));
+
+  // item: [sprite, scale, palettes]. Without one, Pac-Man eats pull request icons.
+  const PAC = {
+    base: { done: "CLEAR!" },
+    halloween: { done: "BOO!", ghost: true },
+    thanksgiving: { done: "STUFFED!", item: ["pie", 2] },
+    winter: { done: "HO HO HO!", item: ["ornament", 2.4, ORNAMENT_PALS] },
+    newyear: { done: "CHEERS!", item: ["star", 2.4, STAR_PALS] },
+    valentine: { done: "XOXO", item: ["heart", 2.6, HEART_PALS] },
+    stpatrick: { done: "LUCKY!", item: ["coin", 3] },
+    summer: { done: "CHILL!", item: ["melon", 2.4] },
+  };
+
+  function pacEffect(c, { anim }) {
+    const field = element("div", { className: "prb-cel-pacfield" });
+    if (c.ghost)
+      field.append(
+        element("div", { className: "prb-cel-ghost" }, sprite("ghost", 3)),
+      );
+    const belt = element("div", { className: "prb-cel-belt" });
+    for (let i = 0; i < 5; i++) {
+      if (!c.item) {
+        const icon = octicon(PULL_REQUEST_ICON_PATH);
+        icon.classList.add("prb-cel-pr");
+        belt.append(icon);
+        continue;
+      }
+      const [name, scale, pals] = c.item;
+      belt.append(sprite(name, scale, { pal: pals?.[i % pals.length] }));
+    }
+    field.append(
+      element("div", { className: "prb-cel-pac" }),
+      element("div", { className: "prb-cel-lane" }, belt),
+      element("div", { className: "prb-cel-clear", textContent: c.done }),
+    );
+    anim.append(field);
+  }
+
+  // Lines starting with "$ " are typed out; the rest print whole. {year} becomes the celebrated year.
+  const LIST_COMMAND = '$ gh pr list --search "review-requested:@me"';
+  const NO_RESULTS = "no pull requests match your search";
+  const TERMINAL = {
+    base: [
+      LIST_COMMAND,
+      NO_RESULTS,
+      "$ git status",
+      "nothing to review, working tree clean ✨",
+    ],
+    halloween: [
+      LIST_COMMAND,
+      NO_RESULTS,
+      "$ git status",
+      "nothing to review. it's quiet. too quiet 🎃",
+    ],
+    thanksgiving: [
+      LIST_COMMAND,
+      NO_RESULTS,
+      "$ echo $GRATITUDE",
+      "thankful for an empty review queue 🙏",
+    ],
+    winter: [
+      "$ santa --check-twice --list=prs",
+      "naughty: 0    nice: all of them",
+      "$ git status",
+      "everything's wrapped up 🎁",
+    ],
+    newyear: [
+      "$ git tag v{year} && git push --tags",
+      " * [new tag]  v{year} -> v{year}",
+      LIST_COMMAND,
+      "new year, zero PRs 🥂",
+    ],
+    valentine: [
+      LIST_COMMAND,
+      NO_RESULTS,
+      '$ git commit -m "<3"',
+      "[main 0214] you reviewed everything ❤️",
+    ],
+    stpatrick: [
+      LIST_COMMAND,
+      NO_RESULTS,
+      "$ git pull --luck",
+      "found a pot of gold: 0 PRs 🍀",
+    ],
+    summer: [
+      LIST_COMMAND,
+      NO_RESULTS,
+      "$ git switch -c vacation",
+      "Switched to a new branch 'vacation' 🏖️",
+    ],
+  };
+
+  function terminalEffect(lines, { anim, later }) {
+    const year = String(celebratedYear(new Date()));
+    const screen = element("div", { className: "prb-cel-term" });
+    anim.append(screen);
+    let index = 0;
+    let typed = 0;
+    let current;
+    const tick = () => {
+      if (index === lines.length) {
+        later(() => {
+          screen.textContent = "";
+          index = 0;
+          tick();
+        }, 2800);
+        return;
+      }
+      const line = lines[index].replaceAll("{year}", year);
+      const isCommand = line.startsWith("$ ");
+      if (typed === 0) {
+        current = element("div", { className: isCommand ? "" : "prb-cel-out" });
+        screen.append(current);
+      }
+      if (!isCommand) {
+        current.textContent = line;
+        index++;
+        later(tick, 450);
+        return;
+      }
+      typed = typed === 0 ? 3 : typed + 1;
+      current.textContent = line.slice(0, typed);
+      if (typed < line.length) return later(tick, 38);
+      index++;
+      typed = 0;
+      later(tick, 500);
+    };
+    tick();
+  }
+
+  // [sprite, scale, palettes]
+  const INVADERS = {
+    base: ["invader", 3],
+    halloween: ["pumpkin", 3],
+    thanksgiving: ["pie", 2.6],
+    winter: ["ornament", 3, ORNAMENT_PALS],
+    newyear: ["star", 3.2, STAR_PALS],
+    valentine: ["heart", 3, HEART_PALS],
+    stpatrick: ["clover", 3, [{ g: HUE.green }, { g: HUE.lime }]],
+    summer: ["melon", 3.4],
+  };
+
+  function invadersEffect([name, scale, pals], { anim, later }) {
+    const field = element("div", { className: "prb-cel-field" });
+    anim.append(field);
+    const run = () => {
+      field.textContent = "";
+      const row = element("div", { className: "prb-cel-invrow" });
+      const invaders = [0, 1, 2, 3, 4].map((i) => {
+        const invader = element(
+          "div",
+          { className: "prb-cel-inv" },
+          sprite(name, scale, { pal: pals?.[i % pals.length] }),
+        );
+        invader.style.left = `${16 + i * 56}px`;
+        row.append(invader);
+        return invader;
+      });
+      const ship = element(
+        "div",
+        { className: "prb-cel-ship" },
+        sprite("ship", 3),
+      );
+      field.append(row, ship);
+      let hit = 0;
+      const fire = () => {
+        if (hit === invaders.length) {
+          field.append(
+            element("div", {
+              className: "prb-cel-wavemsg",
+              textContent: "WAVE CLEAR · 0 LEFT",
+            }),
+          );
+          later(run, 2200);
+          return;
+        }
+        const x = 16 + hit * 56 + 16.5;
+        ship.style.left = `${x - 13.5}px`;
+        later(() => {
+          const bullet = element("div", { className: "prb-cel-bullet" });
+          bullet.style.left = `${x - 1.5}px`;
+          field.append(bullet);
+          bullet.getBoundingClientRect();
+          bullet.style.top = "20px";
+          later(() => {
+            bullet.remove();
+            invaders[hit++].classList.add("prb-cel-dead");
+            later(fire, 220);
+          }, 260);
+        }, 330);
+      };
+      later(fire, 700);
+    };
+    run();
+  }
+
+  // frames: two sprites that swap partway through a 3s loop, with a glow when the second appears.
+  const REWARD = {
+    base: { sprite: ["trophy", 7, "prb-cel-bounce"], sparkle: HUE.gold },
+    halloween: {
+      sprite: ["pumpkin", 10, "prb-cel-lantern"],
+      sparkle: HUE.orange,
+    },
+    thanksgiving: {
+      sprite: ["pie", 8, "prb-cel-bounce"],
+      steam: -34,
+      sparkle: HUE.gold,
+    },
+    winter: { frames: ["giftClosed", "giftOpen", 7], sparkle: HUE.gold },
+    newyear: {
+      sprite: ["star", 11, "prb-cel-bounce"],
+      fireworks: [HUE.gold, HUE.purple, HUE.lime, HUE.teal],
+      sparkle: HUE.gold,
+    },
+    valentine: { sprite: ["heart", 12, "prb-cel-beat"], sparkle: HUE.pink },
+    stpatrick: {
+      sprite: ["pot", 8, "prb-cel-bounce"],
+      rainbow: true,
+      sparkle: HUE.gold,
+    },
+    summer: { sprite: ["iceCream", 9, "prb-cel-bounce"], sparkle: HUE.rose },
+  };
+
+  function rewardEffect(c, { anim, bg }) {
+    const wrap = element("div", { className: "prb-cel-wrap" });
+    if (c.rainbow)
+      wrap.append(element("div", { className: "prb-cel-rainbow" }));
+    if (c.frames) {
+      const [closed, open, scale] = c.frames;
+      wrap.append(
+        element("div", { className: "prb-cel-glow" }),
+        element(
+          "div",
+          { className: "prb-cel-reveal" },
+          sprite(closed, scale),
+          sprite(open, scale),
+        ),
+      );
+    } else {
+      const [name, scale, cls] = c.sprite;
+      wrap.append(sprite(name, scale, { cls }));
+    }
+    decorate(wrap, bg, c);
+    anim.append(wrap);
+  }
+
+  // top: extra rows above the mug. pixels: changes to the mug's own rows. pair: two glasses that clink.
+  const DRINK = {
+    base: { sprite: ["mug"], steam: -36 },
+    halloween: { sprite: ["cauldron"], bubbles: [HUE.lime, -6] },
+    thanksgiving: {
+      sprite: ["mug", { m: HUE.orange, n: "#f3e1c7", w: "#fffaf0" }],
+      top: ["..wwwwwww...."],
+      steam: -36,
+    },
+    winter: {
+      sprite: ["mug", { m: HUE.red, n: "#5a3a22", w: "#fde2e4", x: "#e8b4bc" }],
+      top: ["..ww....ww...", ".www.ww.www..", ".xxx.xx.xxx.."],
+      steam: -50,
+    },
+    newyear: {
+      sprite: ["flute"],
+      pair: true,
+      bubbles: [HUE.gold, -6],
+      sparkle: HUE.gold,
+    },
+    valentine: {
+      sprite: ["mug", { m: HUE.pink, h: "#fff" }],
+      pixels: [
+        [2, 3, "h"],
+        [2, 5, "h"],
+        ...pixelRun(3, 3, 5, "h"),
+        [4, 4, "h"],
+      ],
+      rise: [["♥"], HUE.pink],
+    },
+    stpatrick: {
+      sprite: ["mug", { m: "#2da44e", n: "#b4f1be", w: "#fffaf0" }],
+      top: ["..wwwwwww....", ".wwwwwwwww..."],
+      rise: [["☘\uFE0E"], HUE.green],
+    },
+    summer: {
+      sprite: ["lemonade", {}, "prb-cel-bounce"],
+      bubbles: ["#fffbe6", 70],
+    },
+  };
+
+  function drinkEffect(c, { anim, bg }) {
+    const wrap = element("div", { className: "prb-cel-wrap" });
+    const [name, pal, cls] = c.sprite;
+    let rows = SPRITES[name][0];
+    if (c.top) rows = [...c.top, ...rows];
+    if (c.pixels) rows = withPixels(rows, c.pixels);
+    const glass = () => sprite(name, 8, { rows, pal, cls });
+    wrap.append(
+      c.pair
+        ? element("div", { className: "prb-cel-clink" }, glass(), glass())
+        : glass(),
+    );
+    decorate(wrap, bg, c);
+    anim.append(wrap);
+  }
+
+  // The first color is the falling piece.
+  const TETRIS = {
+    base: [
+      "#00b4d8",
+      HUE.gold,
+      HUE.purple,
+      HUE.lime,
+      "#f85149",
+      HUE.blue,
+      HUE.orange,
+    ],
+    halloween: [HUE.orange, "#8250df", "#d29922", HUE.lime, HUE.rust],
+    thanksgiving: [HUE.rust, "#d29922", HUE.amber, HUE.red, HUE.orange],
+    winter: [HUE.red, HUE.green, "#e6edf3", HUE.gold],
+    newyear: [HUE.gold, HUE.purple, HUE.teal, HUE.orange, HUE.amber],
+    valentine: [HUE.pink, HUE.red, HUE.rose, "#bf3989"],
+    stpatrick: [HUE.green, HUE.lime, HUE.gold, "#2da44e"],
+    summer: [HUE.blue, HUE.gold, HUE.teal, HUE.orange],
+  };
+
+  function tetrisEffect(colors, { anim, later }) {
+    const board = element("div", { className: "prb-cel-tet" });
+    const cells = Array.from({ length: 60 }, () => element("i"));
+    board.append(...cells);
+    anim.append(board);
+    const run = () => {
+      const grid = Array.from({ length: 6 }, () => Array(10).fill(-1));
+      [
+        [5, [0, 1, 2, 7, 8, 9]],
+        [4, [0, 1, 2, 8, 9]],
+        [3, [0, 9]],
+        [2, [0]],
+      ].forEach(([r, cols]) =>
+        cols.forEach((c) => {
+          grid[r][c] = 1 + ((r * 3 + c) % (colors.length - 1));
+        }),
+      );
+      const draw = (pieceRow) =>
+        cells.forEach((cell, i) => {
+          const r = Math.floor(i / 10);
+          const c = i % 10;
+          const value = r === pieceRow && c >= 3 && c <= 6 ? 0 : grid[r][c];
+          cell.className = value < 0 ? "" : "prb-cel-on";
+          cell.style.background = value < 0 ? "" : colors[value];
+        });
+      let row = 0;
+      const drop = () => {
+        draw(row);
+        if (row < 5) {
+          row++;
+          later(drop, 140);
+          return;
+        }
+        grid[5].fill(0, 3, 7);
+        let flashes = 0;
+        const flash = () => {
+          cells
+            .slice(50)
+            .forEach((cell) =>
+              cell.classList.toggle("prb-cel-flash", flashes % 2 === 0),
+            );
+          if (++flashes < 6) return later(flash, 110);
+          grid.splice(5, 1);
+          grid.unshift(Array(10).fill(-1));
+          draw(-1);
+          later(run, 1600);
+        };
+        later(flash, 150);
+      };
+      drop();
+    };
+    run();
+  }
+
+  const CELEBRATIONS = {
+    cat: [catEffect, CAT],
+    rocket: [rocketEffect, ROCKET],
+    pac: [pacEffect, PAC],
+    terminal: [terminalEffect, TERMINAL],
+    invaders: [invadersEffect, INVADERS],
+    reward: [rewardEffect, REWARD],
+    drink: [drinkEffect, DRINK],
+    tetris: [tetrisEffect, TETRIS],
+  };
+
+  // [heading, line below it] for each effect and season.
+  const CELEBRATION_MESSAGES = {
+    cat: {
+      base: [
+        "Review queue: cleared.",
+        "Nothing needs you right now. Dance break.",
+      ],
+      halloween: [
+        "No tricks left in the queue.",
+        "The cat's celebrating. Treat yourself.",
+      ],
+      thanksgiving: ["Plate cleared.", "Thankful for an empty review queue."],
+      winter: [
+        "Sleigh-ing the review queue.",
+        "Every PR reviewed. Enjoy the break.",
+      ],
+      newyear: ["New year, empty queue.", "Party time. Zero PRs."],
+      valentine: ["Your teammates love you.", "Every review done. ♥"],
+      stpatrick: ["Lucky you.", "Not a PR in sight. Jig accordingly."],
+      summer: ["Too cool for a backlog.", "Queue's clear. Go outside."],
+    },
+    rocket: {
+      base: ["Backlog cleared. Ship it.", "Zero open PRs waiting on you."],
+      halloween: ["Flying past the full moon.", "Not a spooky PR in sight."],
+      thanksgiving: [
+        "Leaving the backlog behind.",
+        "Like leaves in the wind. Zero PRs.",
+      ],
+      winter: ["Sleigh, upgraded.", "Every PR delivered. Ho ho ho."],
+      newyear: ["Launching into the new year.", "With an empty queue."],
+      valentine: ["Sending love to the team.", "Every review done. ♥"],
+      stpatrick: ["Riding the rainbow.", "Zero PRs at the end of it."],
+      summer: ["Liftoff, it's summer.", "Queue's clear. Fireworks are on us."],
+    },
+    pac: {
+      base: ["You ate the whole backlog.", "No pull requests left. Om nom."],
+      halloween: [
+        "Ate the backlog, outran the ghost.",
+        "Not a PR left to haunt you.",
+      ],
+      thanksgiving: ["Seconds? No PRs left.", "You cleared your plate."],
+      winter: [
+        "Ornaments: eaten. Queue: empty.",
+        "Please don't eat real ornaments.",
+      ],
+      newyear: ["Nom nom, new year.", "Every PR eaten before midnight."],
+      valentine: ["You gobbled up the love.", "Every review done. ♥"],
+      stpatrick: ["You ate all the gold.", "Zero PRs. Lucky and full."],
+      summer: ["Summer snack, empty queue.", "Every PR eaten. Watermelon too."],
+    },
+    terminal: {
+      base: ["Working tree clean.", "Nothing left to review."],
+      halloween: ["Nothing lurking in the queue.", "It's quiet. Too quiet."],
+      thanksgiving: [
+        "Gratitude committed.",
+        "Thankful for an empty review queue.",
+      ],
+      winter: ["Naughty list: empty.", "Every PR checked twice."],
+      newyear: ["Tagged and released.", "Starting the year with zero PRs."],
+      valentine: ["Committed to you.", "Every review done. ♥"],
+      stpatrick: ["git pull --luck succeeded.", "Zero PRs found."],
+      summer: ["Checked out to vacation.", "Nothing left to review."],
+    },
+    invaders: {
+      base: ["Wave cleared.", "Every PR defeated. New high score."],
+      halloween: ["Pumpkins smashed.", "Every PR defeated. Happy Halloween."],
+      thanksgiving: [
+        "Pie defense complete.",
+        "Every PR defeated. Save room for dessert.",
+      ],
+      winter: ["Ornaments down.", "Every PR defeated. Deck the halls."],
+      newyear: ["Stars shot down.", "Every PR defeated before midnight."],
+      valentine: ["Hearts collected.", "Every PR defeated, lovingly."],
+      stpatrick: ["Shamrocks cleared.", "Every PR defeated. Lucky shot."],
+      summer: ["Watermelon wave cleared.", "Every PR defeated. Grab a slice."],
+    },
+    reward: {
+      base: ["Achievement unlocked: Inbox Zero.", "Every review done."],
+      halloween: ["Jack-o'-lantern lit.", "No PRs left to carve."],
+      thanksgiving: ["Dessert earned.", "Every review done. Have a slice."],
+      winter: ["You unwrapped a present.", "Inside: zero pull requests."],
+      newyear: [
+        "Achievement unlocked: fresh start.",
+        "Zero PRs to kick off the year.",
+      ],
+      valentine: ["Your queue loves you back.", "Every review done. ♥"],
+      stpatrick: ["Found the pot of gold.", "Every review done."],
+      summer: ["Treat yourself.", "Queue's clear. Ice cream earned."],
+    },
+    drink: {
+      base: ["Queue's empty. Go get a coffee.", "You've earned it."],
+      halloween: ["Something's brewing.", "Not PRs, though. Those are done."],
+      thanksgiving: [
+        "Pumpkin spice and zero PRs.",
+        "Sip slowly. Nothing needs you.",
+      ],
+      winter: ["Hot cocoa time.", "Every PR reviewed. Marshmallows earned."],
+      newyear: ["Cheers to an empty queue.", "Here's to the new year."],
+      valentine: ["A warm cup, an empty queue.", "Every review done. ♥"],
+      stpatrick: ["Shamrock shake o'clock.", "Every PR reviewed. Lucky you."],
+      summer: ["Lemonade break.", "Queue's clear. Stay cool."],
+    },
+    tetris: {
+      base: ["Line clear!", "Your review queue just collapsed to zero."],
+      halloween: ["Spooky line clear!", "The queue vanished like a ghost."],
+      thanksgiving: [
+        "Harvest cleared.",
+        "Every PR reviewed. Fall back and relax.",
+      ],
+      winter: ["Line clear, holiday edition.", "Every PR stacked away."],
+      newyear: ["Clearing lines for the new year.", "Fresh board, zero PRs."],
+      valentine: [
+        "Perfect fit.",
+        "You and an empty queue: made for each other.",
+      ],
+      stpatrick: ["Lucky line clear!", "Zero PRs left on the board."],
+      summer: ["Summer line clear!", "Queue's clear. Off to the beach."],
+    },
+  };
+
+  // Adds a celebration just before anchor and returns a function that stops and removes it. Leaving out effect
+  // or season picks a random effect and today's season. Timers stop on their own once the element
+  // is no longer in the page, so a GitHub redraw that drops it leaves nothing running.
+  function celebrate(
+    anchor,
+    {
+      effect = pickOne(Object.keys(CELEBRATIONS)),
+      season = celebrationSeason(new Date()),
+    } = {},
+  ) {
+    injectStyles("prb-cel-styles", CELEBRATION_CSS);
+    const timers = new Set();
+    const root = element("div", { className: "prb-cel" });
+    const stop = () => {
+      timers.forEach(clearTimeout);
+      timers.clear();
+      root.remove();
+    };
+    const later = (fn, ms) => {
+      const id = setTimeout(() => {
+        timers.delete(id);
+        if (!root.isConnected) stop();
+        // A hidden tab checks back once a second instead, so the loops don't churn the page unseen.
+        else if (document.hidden) later(fn, 1000);
+        else fn();
+      }, ms);
+      timers.add(id);
+    };
+    // The animation is decoration, so screen readers get only the message.
+    const bg = element("div", { className: "prb-cel-bg", ariaHidden: "true" });
+    const anim = element("div", {
+      className: "prb-cel-anim",
+      ariaHidden: "true",
+    });
+    const [heading, line] = CELEBRATION_MESSAGES[effect][season];
+    root.dataset.effect = effect;
+    root.dataset.season = season;
+    root.append(
+      bg,
+      anim,
+      element(
+        "div",
+        { className: "prb-cel-msg" },
+        element("h3", { textContent: heading }),
+        element("p", { textContent: line }),
+      ),
+    );
+    anchor.before(root);
+    const [render, seasons] = CELEBRATIONS[effect];
+    render(seasons[season], { anim, bg, later });
+    return stop;
+  }
+
+  const CELEBRATION_CSS = `
+    :root { --prb-cel-snow: #9ec5fe; }
+    [data-color-mode="dark"] { --prb-cel-snow: #e6edf3; }
+    @media (prefers-color-scheme: dark) {
+      [data-color-mode="auto"] { --prb-cel-snow: #e6edf3; }
+    }
+    .prb-cel { position: relative; height: 240px; overflow: hidden; }
+    .prb-cel + [data-component="Blankslate"] { display: none; }
+    .prb-cel-bg { position: absolute; inset: 0; pointer-events: none; mask-image: linear-gradient(#000 50%, transparent 72%); }
+    .prb-cel-anim { position: absolute; inset: 0 0 76px; display: flex; align-items: center; justify-content: center; }
+    .prb-cel-msg { position: absolute; left: 0; right: 0; bottom: 18px; z-index: 2; padding: 0 12px; text-align: center; }
+    .prb-cel-msg h3 { margin: 0; font-family: inherit; font-size: 20px; font-weight: 600; line-height: 1.25; color: var(--fgColor-default, #1f2328); }
+    .prb-cel-msg p { margin: 2px 0 0; font-size: 14px; line-height: 1.5; color: var(--fgColor-muted, #59636e); }
+    .prb-cel-px { display: block; shape-rendering: crispEdges; }
+    .prb-cel-wrap { position: relative; }
+
+    .prb-cel-pt { position: absolute; font-size: 20px; opacity: 0; animation: prb-cel-rise 2.2s ease-out infinite; }
+    .prb-cel-down { animation-name: prb-cel-sink; }
+    @keyframes prb-cel-rise { 0% { opacity: 0; transform: translateY(10px); } 20% { opacity: 1; } 100% { opacity: 0; transform: translateY(-50px) rotate(20deg); } }
+    @keyframes prb-cel-sink { 0% { opacity: 0; transform: translateY(-30px); } 20% { opacity: 1; } 100% { opacity: 0; transform: translateY(40px) rotate(40deg); } }
+    .prb-cel-tw { position: absolute; font-size: 16px; animation: prb-cel-twinkle 1.6s ease-in-out infinite; }
+    @keyframes prb-cel-twinkle { 0%, 100% { opacity: 0; transform: scale(.4); } 50% { opacity: 1; transform: scale(1); } }
+    .prb-cel-streak { position: absolute; top: -20px; width: 2px; border-radius: 1px; background: var(--fgColor-muted, #59636e); animation: prb-cel-fall linear infinite; }
+    .prb-cel-glyph { width: auto; background: none; font-size: 12px; font-style: normal; }
+    .prb-cel-flake { position: absolute; top: -10px; border-radius: 50%; background: var(--prb-cel-snow); animation: prb-cel-snow linear infinite; }
+    .prb-cel-drift { position: absolute; top: -24px; font-size: 16px; animation: prb-cel-leaf linear infinite; }
+    @keyframes prb-cel-fall { to { transform: translateY(280px); } }
+    @keyframes prb-cel-snow { to { transform: translate(24px, 280px); } }
+    @keyframes prb-cel-leaf { to { transform: translate(40px, 280px) rotate(360deg); } }
+    .prb-cel-fw { position: absolute; }
+    .prb-cel-fw i { position: absolute; width: 4px; height: 4px; margin: -2px; border-radius: 50%; background: currentColor; opacity: 0; animation: prb-cel-boom 1.8s ease-out infinite; }
+    @keyframes prb-cel-boom { 0% { opacity: 1; transform: rotate(var(--prb-a)) translateX(0); } 100% { opacity: 0; transform: rotate(var(--prb-a)) translateX(36px); } }
+    .prb-cel-steam { position: absolute; color: var(--fgColor-muted, #59636e); opacity: 0; animation: prb-cel-steam 2s ease-out infinite; }
+    @keyframes prb-cel-steam { 0% { opacity: 0; transform: translateY(8px); } 40% { opacity: .8; } 100% { opacity: 0; transform: translateY(-18px); } }
+    .prb-cel-bubble { position: absolute; border-radius: 50%; opacity: 0; animation: prb-cel-bubble 1.6s ease-out infinite; }
+    @keyframes prb-cel-bubble { 0% { opacity: 0; transform: translateY(0) scale(.5); } 20% { opacity: 1; } 100% { opacity: 0; transform: translateY(-40px) scale(1.2); } }
+    .prb-cel-spook { position: absolute; font-size: 22px; opacity: 0; animation: prb-cel-spook 2.8s ease-in-out infinite; }
+    @keyframes prb-cel-spook { 0%, 100% { opacity: 0; transform: scale(.8); } 40%, 60% { opacity: .85; transform: scale(1); } }
+    .prb-cel-moon { position: absolute; right: 14%; top: 18px; width: 56px; height: 56px; border-radius: 50%; background: #f6e7a1; box-shadow: 0 0 28px #f6e7a188; }
+
+    .prb-cel-cat { position: relative; animation: prb-cel-bob .5s steps(1) infinite; }
+    .prb-cel-cat svg + svg { position: absolute; inset: 0; }
+    .prb-cel-f1 { animation: prb-cel-show .5s steps(1) infinite; }
+    .prb-cel-f2 { opacity: 0; animation: prb-cel-show .5s steps(1) infinite reverse; }
+    @keyframes prb-cel-show { 0% { opacity: 1; } 50% { opacity: 0; } }
+    @keyframes prb-cel-bob { 0% { transform: translateY(0) rotate(-4deg); } 50% { transform: translateY(-6px) rotate(4deg); } }
+
+    .prb-cel-rocket { position: relative; z-index: 1; animation: prb-cel-shake .12s linear infinite; }
+    .prb-cel-rocket svg { display: block; }
+    .prb-cel-flame { transform-origin: 20px 50px; animation: prb-cel-flicker .15s ease-in-out infinite alternate; }
+    @keyframes prb-cel-flicker { from { transform: scaleY(.75); } to { transform: scaleY(1.15); } }
+    @keyframes prb-cel-shake { 0%, 100% { transform: translate(0, 0); } 25% { transform: translate(-1px, 1px); } 75% { transform: translate(1px, -1px); } }
+    .prb-cel-trail { position: absolute; left: 50%; top: 68px; width: 18px; height: 150px; z-index: -1; transform-origin: top; background: linear-gradient(90deg, ${RAINBOW.map((color, i) => `${color} ${(i * 100) / 6}% ${((i + 1) * 100) / 6}%`).join(", ")}); mask-image: linear-gradient(#000, transparent); animation: prb-cel-wave .5s ease-in-out infinite alternate; }
+    @keyframes prb-cel-wave { from { transform: translateX(-50%) skewX(-10deg); } to { transform: translateX(-50%) skewX(10deg); } }
+
+    .prb-cel-pacfield { position: relative; width: 360px; height: 48px; }
+    .prb-cel-pac { position: absolute; left: 56px; top: 6px; width: 36px; height: 36px; z-index: 2; }
+    .prb-cel-pac::before, .prb-cel-pac::after { content: ""; position: absolute; left: 0; width: 36px; height: 18px; background: #f5c518; }
+    .prb-cel-pac::before { top: 0; border-radius: 18px 18px 0 0; transform-origin: 50% 100%; animation: prb-cel-jaw-top .25s linear infinite alternate; }
+    .prb-cel-pac::after { top: 18px; border-radius: 0 0 18px 18px; transform-origin: 50% 0; animation: prb-cel-jaw-bottom .25s linear infinite alternate; }
+    @keyframes prb-cel-jaw-top { to { transform: rotate(-35deg); } }
+    @keyframes prb-cel-jaw-bottom { to { transform: rotate(35deg); } }
+    .prb-cel-ghost { position: absolute; left: 6px; top: 12px; animation: prb-cel-hover .4s ease-in-out infinite alternate; }
+    @keyframes prb-cel-hover { to { transform: translateY(-4px); } }
+    .prb-cel-lane { position: absolute; left: 74px; right: 0; top: 0; bottom: 0; overflow: hidden; }
+    .prb-cel-belt { position: absolute; top: 0; bottom: 0; left: 0; display: flex; align-items: center; gap: 24px; animation: prb-cel-belt 5s linear infinite; }
+    .prb-cel-belt > * { flex: none; }
+    .prb-cel-pr { width: 16px; height: 16px; fill: var(--fgColor-success, #1a7f37); }
+    @keyframes prb-cel-belt { 0% { transform: translateX(290px); } 70%, 100% { transform: translateX(-240px); } }
+    .prb-cel-clear { position: absolute; right: 4px; top: 8px; font: 700 18px/32px ui-monospace, SFMono-Regular, Menlo, monospace; letter-spacing: .05em; color: var(--fgColor-success, #1a7f37); opacity: 0; animation: prb-cel-clear 5s linear infinite; }
+    @keyframes prb-cel-clear { 0%, 70% { opacity: 0; transform: scale(.6); } 76% { opacity: 1; transform: scale(1.2); } 82%, 95% { opacity: 1; transform: scale(1); } 100% { opacity: 0; } }
+
+    .prb-cel-term { width: min(440px, 92%); height: 118px; padding: 10px 12px; overflow: hidden; text-align: left; white-space: pre; background: #0d1117; color: #e6edf3; border: 1px solid var(--borderColor-default, #d1d9e0); border-radius: 6px; font: 12px/1.6 ui-monospace, SFMono-Regular, Menlo, monospace; }
+    .prb-cel-out { color: #3fb950; }
+    .prb-cel-term div:last-child::after { content: "▋"; color: #9198a1; animation: prb-cel-show 1s steps(1) infinite; }
+
+    .prb-cel-field { position: relative; width: 300px; height: 136px; }
+    .prb-cel-invrow { position: absolute; inset: 0; animation: prb-cel-march 1s steps(1) infinite; }
+    @keyframes prb-cel-march { 0% { transform: translateX(-4px); } 50% { transform: translateX(4px); } }
+    .prb-cel-inv { position: absolute; top: 6px; width: 33px; height: 26px; display: flex; align-items: center; justify-content: center; }
+    .prb-cel-dead { animation: prb-cel-pop .25s forwards; }
+    @keyframes prb-cel-pop { to { transform: scale(1.7); opacity: 0; } }
+    .prb-cel-ship { position: absolute; top: 116px; left: 136px; transition: left .3s ease-in-out; }
+    .prb-cel-bullet { position: absolute; top: 106px; width: 3px; height: 10px; background: var(--fgColor-accent, #0969da); transition: top .25s linear; }
+    .prb-cel-wavemsg { position: absolute; top: 40px; left: 0; right: 0; text-align: center; font: 700 18px ui-monospace, SFMono-Regular, Menlo, monospace; color: var(--fgColor-success, #1a7f37); animation: prb-cel-pop-in .3s; }
+    @keyframes prb-cel-pop-in { from { transform: scale(.5); opacity: 0; } }
+
+    .prb-cel-bounce { animation: prb-cel-bounce 1.2s ease-in-out infinite alternate; }
+    @keyframes prb-cel-bounce { to { transform: translateY(-8px); } }
+    .prb-cel-beat { animation: prb-cel-beat 1.1s ease-in-out infinite; }
+    @keyframes prb-cel-beat { 0%, 60%, 100% { transform: scale(1); } 15% { transform: scale(1.15); } 30% { transform: scale(1); } 45% { transform: scale(1.1); } }
+    .prb-cel-lantern { animation: prb-cel-lantern .18s ease-in-out infinite alternate; }
+    @keyframes prb-cel-lantern { from { filter: drop-shadow(0 0 6px #f0883e); } to { filter: drop-shadow(0 0 14px #f5c518); } }
+    .prb-cel-reveal { position: relative; animation: prb-cel-wiggle 3s ease-in-out infinite; }
+    .prb-cel-reveal svg:first-child { animation: prb-cel-swap-out 3s steps(1) infinite; }
+    .prb-cel-reveal svg + svg { position: absolute; left: 0; bottom: 0; opacity: 0; animation: prb-cel-swap-in 3s steps(1) infinite; }
+    @keyframes prb-cel-swap-out { 0% { opacity: 1; } 55% { opacity: 0; } }
+    @keyframes prb-cel-swap-in { 0% { opacity: 0; } 55% { opacity: 1; } }
+    @keyframes prb-cel-wiggle { 0%, 30%, 55%, 100% { transform: rotate(0); } 35%, 45% { transform: rotate(-4deg); } 40%, 50% { transform: rotate(4deg); } }
+    .prb-cel-glow { position: absolute; left: 50%; top: 40%; width: 160px; height: 160px; margin: -80px; border-radius: 50%; background: radial-gradient(#f5c51899, transparent 65%); opacity: 0; animation: prb-cel-glow 3s ease-out infinite; }
+    @keyframes prb-cel-glow { 0%, 54% { opacity: 0; transform: scale(.4); } 62% { opacity: 1; transform: scale(1); } 92% { opacity: 1; } 100% { opacity: 0; } }
+    .prb-cel-rainbow { position: absolute; left: 50%; bottom: 20px; width: 220px; height: 110px; margin-left: -110px; border-radius: 110px 110px 0 0; background: radial-gradient(circle 110px at 50% 100%, transparent 56%, ${[
+      ...RAINBOW,
+    ]
+      .reverse()
+      .map((color, i) => `${color} ${56 + i * 7}% ${63 + i * 7}%`)
+      .join(
+        ", ",
+      )}, transparent 98%); animation: prb-cel-arc 3.5s ease-in-out infinite; }
+    @keyframes prb-cel-arc { 0% { clip-path: inset(0 100% 0 0); } 35%, 90% { clip-path: inset(0); } 100% { clip-path: inset(0); opacity: 0; } }
+
+    .prb-cel-clink { display: flex; gap: 2px; align-items: flex-end; }
+    .prb-cel-clink svg { transform-origin: 50% 100%; }
+    .prb-cel-clink svg:first-child { animation: prb-cel-clink-left 1.6s ease-in-out infinite; }
+    .prb-cel-clink svg:last-child { animation: prb-cel-clink-right 1.6s ease-in-out infinite; }
+    @keyframes prb-cel-clink-left { 0%, 55%, 100% { transform: rotate(-14deg) translateX(-8px); } 70% { transform: rotate(-3deg) translateX(3px); } }
+    @keyframes prb-cel-clink-right { 0%, 55%, 100% { transform: rotate(14deg) translateX(8px); } 70% { transform: rotate(3deg) translateX(-3px); } }
+
+    .prb-cel-tet { display: grid; grid-template-columns: repeat(10, 16px); gap: 1px; padding: 3px; background: var(--bgColor-muted, #f6f8fa); border: 1px solid var(--borderColor-default, #d1d9e0); border-radius: 4px; }
+    .prb-cel-tet i { display: block; width: 16px; height: 16px; border-radius: 2px; }
+    .prb-cel-on { box-shadow: inset -2px -2px rgba(0, 0, 0, .25), inset 2px 2px rgba(255, 255, 255, .35); }
+    .prb-cel-tet .prb-cel-flash { background: #fff !important; box-shadow: 0 0 6px #fff; }
+    /* Freezes each effect on its first frame. Particles start hidden, so they drop out entirely. */
+    @media (prefers-reduced-motion: reduce) {
+      .prb-cel *, .prb-cel *::before, .prb-cel *::after { animation: none !important; transition: none !important; }
+      .prb-cel-pac::before { transform: rotate(-30deg); }
+      .prb-cel-pac::after { transform: rotate(30deg); }
+    }
+  `;
+
+  // One celebration at a time. Each query keeps the effect it first rolled until the page reloads,
+  // so a GitHub redraw of the empty list brings back the same one.
+  const celebration = { stop: null, root: null, key: null };
+  const celebrationEffects = new Map();
+
+  // The empty state and the query that produced it, or null. The selected tab's link holds the
+  // submitted query, and its "(0)" rules out the empty state GitHub can flash while results load.
+  function emptyList() {
+    const blankslate = document.querySelector('[data-component="Blankslate"]');
+    const tab = document.querySelector('a[aria-current="true"][href*="q="]');
+    if (!blankslate || !tab || listRows().length) return null;
+    if (!/\(0\)\s*$/.test(tab.textContent)) return null;
+    return { blankslate, query: new URL(tab.href).searchParams.get("q") ?? "" };
+  }
+
+  function updateCelebration() {
+    const empty = isPrListPage() && isOn("celebration") ? emptyList() : null;
+    const wanted = empty && isWaitingQuery(empty.query) ? empty : null;
+    const key = wanted?.query;
+    const showing =
+      celebration.root?.isConnected &&
+      celebration.root.nextElementSibling === wanted?.blankslate;
+    if (showing && celebration.key === key) return;
+    celebration.stop?.();
+    Object.assign(celebration, { stop: null, root: null, key: null });
+    if (!wanted) return;
+    if (!celebrationEffects.has(key))
+      celebrationEffects.set(key, pickOne(Object.keys(CELEBRATIONS)));
+    celebration.stop = celebrate(wanted.blankslate, {
+      effect: celebrationEffects.get(key),
+    });
+    celebration.root = wanted.blankslate.previousElementSibling;
+    celebration.key = key;
+  }
+
   // Runs on all of github.com because GitHub navigates between pages without a full reload.
   function isPrListPage() {
     return (
@@ -1783,6 +3321,7 @@
   function highlight() {
     if (!isPrListPage()) {
       if (activeTicket.key) setActiveTicket(null);
+      updateCelebration();
       return;
     }
 
@@ -1802,6 +3341,7 @@
     addFooter();
     // Runs on every change GitHub makes, so the author list rebuilds only when the page's authors change.
     if (renderedAuthors !== authorSignature(rows)) renderPanel();
+    updateCelebration();
   }
 
   let highlightQueued = false;
@@ -1825,7 +3365,7 @@
   // The script's own renders would otherwise rerun highlight() after every badge update. Removals
   // always count, since that's how a GitHub redraw that drops the badges shows up.
   const OWN_NODES =
-    ".prb-group, .prb-reviews, .prb-ticket, .prb-tg-arrow, #prb-footer";
+    ".prb-group, .prb-reviews, .prb-ticket, .prb-tg-arrow, #prb-footer, .prb-cel";
   function isOwnNode(node) {
     const el = node.nodeType === Node.ELEMENT_NODE ? node : node.parentElement;
     return !!el?.closest(OWN_NODES);

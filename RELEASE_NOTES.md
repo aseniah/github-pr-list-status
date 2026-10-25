@@ -1,5 +1,10 @@
 # Release Notes
 
+## 1.6
+
+- **Something for an empty queue.** Work through every PR waiting on your review, then take another look at the list. It may not be the same twice. Not your thing? Turn off **Celebrate an empty PR list 🎉** in the settings panel.
+- **Settings on empty lists.** **Settings** and **Legend** now show below an empty list too.
+
 ## 1.5.1
 
 - **Faster lists.** The script reprocesses the list only when GitHub changes it, no longer after each of its own badge updates. Approval is read from GitHub's review status alone, without scanning each row's text, and rows still turn green as soon as GitHub shows the approval. Badges and colors are unchanged.

@@ -2,7 +2,7 @@
 // @name        GitHub PR List Status
 // @namespace   https://github.com/aseniah
 // @description Colors PRs by age and approval, and adds merge state and line count badges to the pull requests list
-// @version     1.6
+// @version     1.7
 // @license     MIT
 // @updateURL   https://raw.githubusercontent.com/aseniah/github-pr-list-status/main/github-pr-list-status.user.js
 // @downloadURL https://raw.githubusercontent.com/aseniah/github-pr-list-status/main/github-pr-list-status.user.js
@@ -33,10 +33,22 @@
     ignoredReviewers: [/\[bot\]$/i, /^copilot/i],
 
     // Leave lockfiles out of the line counts so dependency upgrades show the reviewable size.
-    // This and flagWaitingThreads are defaults. Choices made in the settings panel take precedence.
+    // The exclude* settings and flagWaitingThreads are defaults. Choices made in the settings panel take precedence.
+    // A file matching more than one pattern counts toward the first that's on: lockfiles, generated, tests, then docs.
     excludeLockfiles: true,
     lockfilePattern:
       /(^|\/)(package-lock\.json|npm-shrinkwrap\.json|yarn\.lock|pnpm-lock\.yaml|bun\.lockb?|Gemfile\.lock|Cargo\.lock|composer\.lock|poetry\.lock|Pipfile\.lock|uv\.lock|go\.sum|flake\.lock)$/,
+    // Generated code, matched only by names its tools always use: protobuf, minified bundles, and output folders.
+    excludeGenerated: true,
+    generatedPattern:
+      /(^|\/)(generated|__generated__|dist)\/|\.pb\.[^/]+$|_(grpc_)?pb\.(js|ts|d\.ts)$|\.generated\.[^/]+$|_pb2(_grpc)?\.pyi?$|\.min\.(js|css)$|\.(js|css)\.map$|(^|\/)zz_generated\.[^/]+$|\.(g|freezed)\.dart$|\.[Dd]esigner\.cs$/,
+    // Leave tests, mocks, fixtures, and snapshots out too, so the count reflects the change under test.
+    excludeTests: true,
+    testPattern:
+      /(^|\/)(__tests__|__mocks__|__snapshots__|__fixtures__|tests?|spec|e2e|cypress|mocks?|fixtures|testdata|androidTest|testFixtures|[\w.]*Tests)\/|[._](test|spec)\.(?!(json|ya?ml|md|txt)$)[^/]+$|\.e2e-spec\.[^/]+$|\.cy\.[^/]+$|(^|\/)(test_[^/]*\.py|tests\.py|conftest\.py)$|\w(Tests?|Spec)\.(java|kt|swift|cs|scala|groovy)$|\.snap$/,
+    // Docs, currently Markdown, which includes READMEs and agent instruction files.
+    excludeDocs: true,
+    docsPattern: /\.(md|mdx|markdown)$/i,
 
     // On PRs you opened, count unresolved threads waiting on your reply or reaction.
     // Adds one request for each of your PRs that has comments.
@@ -93,9 +105,32 @@
     {
       key: "excludeLockfiles",
       label: "Leave out lockfiles",
-      description: "Lists every file in the PR, so it costs more on large PRs.",
+      description:
+        "Lists every file in the PR, so it costs more on large PRs. The Leave out options share that list.",
       parent: "lineCounts",
       default: CONFIG.excludeLockfiles,
+    },
+    {
+      key: "excludeGenerated",
+      label: "Leave out generated files",
+      description:
+        "Protobuf output, minified bundles, and generated or dist folders.",
+      parent: "lineCounts",
+      default: CONFIG.excludeGenerated,
+    },
+    {
+      key: "excludeTests",
+      label: "Leave out tests",
+      description: "Tests, mocks, fixtures, and snapshots.",
+      parent: "lineCounts",
+      default: CONFIG.excludeTests,
+    },
+    {
+      key: "excludeDocs",
+      label: "Leave out docs",
+      description: "Markdown, including READMEs and agent instructions.",
+      parent: "lineCounts",
+      default: CONFIG.excludeDocs,
     },
     {
       key: "reviewCounts",
@@ -126,9 +161,40 @@
   const FEWER_REQUESTS_OFF = new Set([
     "checks",
     "excludeLockfiles",
+    "excludeGenerated",
+    "excludeTests",
+    "excludeDocs",
     "commenters",
     "waitingThreads",
   ]);
+  // In match order. noun names the skipped lines in the tooltip, and plural names the files in the legend.
+  const LINE_FILTERS = [
+    {
+      key: "excludeLockfiles",
+      pattern: CONFIG.lockfilePattern,
+      noun: "lockfile",
+      plural: "lockfiles",
+    },
+    {
+      key: "excludeGenerated",
+      pattern: CONFIG.generatedPattern,
+      noun: "generated",
+      plural: "generated files",
+    },
+    {
+      key: "excludeTests",
+      pattern: CONFIG.testPattern,
+      noun: "test",
+      plural: "tests",
+    },
+    {
+      key: "excludeDocs",
+      pattern: CONFIG.docsPattern,
+      noun: "doc",
+      plural: "docs",
+    },
+  ];
+  const LINE_FILTER_KEYS = LINE_FILTERS.map((f) => f.key);
   const HIGHLIGHT_STYLES = ["solid", "rainbow"];
   // Only choices that differ from the defaults are stored, so changing a default in CONFIG still applies.
   const SETTINGS_KEY = "prb-settings";
@@ -186,16 +252,16 @@
     const missing = FEATURES.some(
       (f) =>
         f.key !== "waitingThreads" &&
-        f.key !== "excludeLockfiles" &&
+        !LINE_FILTER_KEYS.includes(f.key) &&
         f.key !== "ticketGroups" &&
         f.key !== "celebration" &&
         settings.features[f.key] &&
         !info.features?.[f.key],
     );
-    const lockfilesChanged =
-      isOn("lineCounts") &&
-      info.features?.excludeLockfiles !== isOn("excludeLockfiles");
-    return missing || lockfilesChanged;
+    // Line groups cover every filter, so only a PR counted without the file list needs it fetched.
+    const needsFileList =
+      isOn("lineCounts") && LINE_FILTER_KEYS.some(isOn) && !info.lineGroups;
+    return missing || needsFileList;
   }
 
   const STYLE_CLASSES = {
@@ -252,6 +318,9 @@
     .prb-size { background: var(--bgColor-default, #fff); border-color: var(--borderColor-default, #d1d9e0); color: var(--fgColor-muted, #59636e); font-variant-numeric: tabular-nums; }
     .prb-size .add { color: var(--fgColor-success, #1a7f37); }
     .prb-size .del { color: var(--fgColor-danger, #d1242f); }
+    .prb[data-prb-tip], .prb-review-counts [data-prb-tip] { cursor: default; }
+    .prb-size.prb-trimmed { border-style: dashed; border-color: var(--fgColor-muted, #59636e); }
+    .prb-bubble { display: none; position: absolute; z-index: 100; max-width: 260px; padding: 6px 8px; border: 1px solid var(--borderColor-default, #d1d9e0); border-radius: 6px; background: var(--bgColor-default, #fff); box-shadow: 0 8px 24px rgba(37, 41, 46, 0.12); color: var(--fgColor-default, #1f2328); font-size: 12px; font-weight: 400; line-height: 18px; white-space: pre-line; pointer-events: none; }
     .prb-ready    { background: var(--bgColor-success-emphasis, #1a7f37); color: var(--fgColor-onEmphasis, #fff); }
     .prb-behind   { background: var(--bgColor-attention-muted, #fff8c5); border-color: var(--borderColor-attention-emphasis, #d4a72c); color: var(--fgColor-attention, #9a6700); }
     .prb-conflict, .prb-failing { background: var(--bgColor-danger-muted, #ffebe9); border-color: var(--borderColor-danger-muted, #ff818266); color: var(--fgColor-danger, #d1242f); }
@@ -446,29 +515,60 @@
     return response.json();
   }
 
-  async function loadLineCounts(prPath, excludeLockfiles) {
-    if (excludeLockfiles) {
+  // lineGroups is null without the file list, and empty when file_tree listed no files.
+  async function loadLineCounts(prPath, features) {
+    const filtering = LINE_FILTER_KEYS.some((key) => features[key]);
+    if (filtering) {
       const tree = await fetchPageData(prPath, "file_tree");
-      if (tree.diffs?.length) {
-        const counts = { linesAdded: 0, linesDeleted: 0, excludedLines: 0 };
-        // file_tree leaves out count fields that are zero.
-        tree.diffs.forEach(({ path, linesAdded = 0, linesDeleted = 0 }) => {
-          if (CONFIG.lockfilePattern.test(path)) {
-            counts.excludedLines += linesAdded + linesDeleted;
-          } else {
-            counts.linesAdded += linesAdded;
-            counts.linesDeleted += linesDeleted;
-          }
-        });
-        return counts;
-      }
+      if (tree.diffs?.length) return groupLines(tree.diffs);
     }
     const { diffstat } = await fetchPageData(prPath, "diffstat");
     return {
       linesAdded: diffstat.linesAdded,
       linesDeleted: diffstat.linesDeleted,
-      excludedLines: 0,
+      lineGroups: filtering ? [] : null,
     };
+  }
+
+  // Files are grouped by which patterns they match, so toggling filters later needs no new request.
+  function groupLines(diffs) {
+    const counts = { linesAdded: 0, linesDeleted: 0 };
+    const byMask = new Map();
+    // file_tree leaves out count fields that are zero.
+    diffs.forEach(({ path, linesAdded = 0, linesDeleted = 0 }) => {
+      counts.linesAdded += linesAdded;
+      counts.linesDeleted += linesDeleted;
+      const mask = LINE_FILTERS.reduce(
+        (bits, f, i) => (f.pattern.test(path) ? bits | (1 << i) : bits),
+        0,
+      );
+      if (!mask) return;
+      const group = byMask.get(mask) || { mask, added: 0, deleted: 0 };
+      group.added += linesAdded;
+      group.deleted += linesDeleted;
+      byMask.set(mask, group);
+    });
+    return { ...counts, lineGroups: [...byMask.values()] };
+  }
+
+  // A file counts toward the first filter it matches among those that are on.
+  function shownLines(info) {
+    const counts = {
+      linesAdded: info.linesAdded,
+      linesDeleted: info.linesDeleted,
+      skippedLines: {},
+    };
+    (info.lineGroups || []).forEach(({ mask, added, deleted }) => {
+      const filter = LINE_FILTERS.find(
+        (f, i) => mask & (1 << i) && isOn(f.key),
+      );
+      if (!filter) return;
+      counts.linesAdded -= added;
+      counts.linesDeleted -= deleted;
+      counts.skippedLines[filter.key] =
+        (counts.skippedLines[filter.key] || 0) + added + deleted;
+    });
+    return counts;
   }
 
   // Each endpoint is requested only when a feature that needs it is on.
@@ -482,9 +582,7 @@
       features.checks ||
       features.waitingThreads;
     const [lines, mergeBox, checks, participants] = await Promise.all([
-      features.lineCounts
-        ? loadLineCounts(prPath, features.excludeLockfiles)
-        : null,
+      features.lineCounts ? loadLineCounts(prPath, features) : null,
       needsMergeBox
         ? fetchPageData(
             prPath,
@@ -580,16 +678,38 @@
     const el = document.createElement("span");
     el.className = `prb ${className}`;
     el.textContent = text;
-    if (tooltip) el.title = tooltip;
+    if (tooltip) setTip(el, tooltip);
     return el;
   }
 
+  function setTip(el, tip) {
+    el.dataset.prbTip = tip;
+    el.setAttribute("aria-description", tip);
+  }
+
+  function sizeLegend() {
+    const left = LINE_FILTERS.filter((f) => isOn(f.key)).map((f) => f.plural);
+    return left.length
+      ? `Lines added and deleted, not counting ${listOf(left, "or")}`
+      : "Lines added and deleted";
+  }
+
+  function listOf(items, conjunction) {
+    if (items.length < 3) return items.join(` ${conjunction} `);
+    return `${items.slice(0, -1).join(", ")}, ${conjunction} ${items.at(-1)}`;
+  }
+
   function sizePill(info) {
-    const excluded = info.excludedLines
-      ? `\n${info.excludedLines} lockfile lines not counted`
+    const counts = LINE_FILTERS.filter((f) => info.skippedLines?.[f.key]).map(
+      (f) => [info.skippedLines[f.key], f.noun],
+    );
+    const skipped = counts.map(([n, noun]) => `${n} ${noun}`);
+    const line = counts.length === 1 && counts[0][0] === 1 ? "line" : "lines";
+    const excluded = skipped.length
+      ? `\n${listOf(skipped, "and")} ${line} not counted`
       : "";
     const el = pill(
-      "prb-size",
+      skipped.length ? "prb-size prb-trimmed" : "prb-size",
       "",
       `+${info.linesAdded} added, −${info.linesDeleted} deleted${excluded}`,
     );
@@ -901,19 +1021,23 @@
     }
     const el = document.createElement("span");
     el.className = "prb-review-counts";
-    el.title = [
-      ...(waiting ? [waitingTooltip(threads)] : []),
-      ...(reRequested ? ["Your review was re-requested"] : []),
-      ...parts.map((part) => `${part.label}: ${part.people.join(", ")}`),
-    ].join("\n");
     slot.replaceChildren(el);
-    if (waiting) el.append(waitingBadge(threads.waiting));
-    if (reRequested) el.append(reRequestIcon());
+    if (waiting) {
+      const badge = waitingBadge(threads.waiting);
+      setTip(badge, waitingTooltip(threads));
+      el.append(badge);
+    }
+    if (reRequested) {
+      const icon = reRequestIcon();
+      setTip(icon, "Your review was re-requested");
+      el.append(icon);
+    }
     el.append(
       ...parts.map((part) => {
         const count = document.createElement("span");
         count.className = part.className;
         count.append(part.icon ?? discussionIcon(), String(part.people.length));
+        setTip(count, `${part.label}: ${part.people.join(", ")}`);
         return count;
       }),
     );
@@ -981,12 +1105,20 @@
       counts.append(count);
       return counts;
     };
-    const sample = sizePill({
-      linesAdded: 96,
-      linesDeleted: 12,
-      excludedLines: 0,
-    });
-    sample.removeAttribute("title");
+    const sizeSample = (info) => {
+      const el = sizePill({ linesAdded: 96, linesDeleted: 12, ...info });
+      delete el.dataset.prbTip;
+      el.removeAttribute("aria-description");
+      return el;
+    };
+    const trimmed = LINE_FILTER_KEYS.some(isOn)
+      ? [
+          [
+            sizeSample({ skippedLines: { excludeTests: 1 } }),
+            "Dashed when files were left out. Hover for how many lines.",
+          ],
+        ]
+      : [];
 
     const rowColors = [
       [swatch(CONFIG.approvedColor), "Approved"],
@@ -1038,12 +1170,8 @@
           ? `A check matching ${rule.match} is failing`
           : `${rule.match} is failing`,
       ]),
-      [
-        sample,
-        isOn("excludeLockfiles")
-          ? "Lines added and deleted, not counting lockfiles"
-          : "Lines added and deleted",
-      ],
+      [sizeSample(), sizeLegend()],
+      ...trimmed,
       [errorMark(), "Some details didn't load. Hover for why."],
       [authorChip("John Doe (jdoe)"), "An author you chose to highlight"],
       ...tickets,
@@ -1402,7 +1530,10 @@
     el.className = "prb-error";
     el.textContent = "⚠";
     if (reason)
-      el.title = `PR List Status couldn't load all of this PR's details. ${reason}.`;
+      setTip(
+        el,
+        `PR List Status couldn't load all of this PR's details. ${reason}.`,
+      );
     return el;
   }
 
@@ -1519,7 +1650,7 @@
   }
 
   function renderBadges(group, row, info) {
-    const size = shows(info, "lineCounts") ? [sizePill(info)] : [];
+    const size = shows(info, "lineCounts") ? [sizePill(shownLines(info))] : [];
     group.replaceChildren(...statePills(info, isApproved(row)), ...size);
     group.prbInfo = info;
     renderReviews(row, info, group.prbThreads);
@@ -1653,11 +1784,11 @@
       const className = shared
         ? `prb-ticket prb-tg-${colors.get(key)}`
         : "prb-ticket prb-ticket-single";
-      const title = shared
+      const tip = shared
         ? `${counts.get(key)} PRs on this page reference ${key}. Click to search every PR that mentions it.`
         : `The only PR on this page with ${key}. Opens a search for every PR that mentions it.`;
       if (el.className !== className) el.className = className;
-      if (el.title !== title) el.title = title;
+      if (el.dataset.prbTip !== tip) setTip(el, tip);
     });
     if (activeTicket.key && !colors.has(activeTicket.key))
       setActiveTicket(null);
@@ -1676,7 +1807,17 @@
 
   // Hovering a shared key dims the other rows. Browsers repeat mouse events at the same clientX/Y after
   // a scroll, so the group stays active while scrolling and ends only when the pointer really moves away.
-  const activeTicket = { key: null, color: "", row: null, x: -1, y: -1 };
+  const activeTicket = {
+    key: null,
+    color: "",
+    row: null,
+    x: -1,
+    y: -1,
+    anchorX: -1,
+    anchorY: -1,
+  };
+  // Scrolling nudges the pointer, so moves this small change nothing, even onto another pill.
+  const TICKET_HOVER_SLACK = 10;
   let ticketArrows = null;
 
   function groupRows() {
@@ -1752,11 +1893,22 @@
         return;
       activeTicket.x = event.clientX;
       activeTicket.y = event.clientY;
+      if (
+        activeTicket.key &&
+        Math.hypot(
+          event.clientX - activeTicket.anchorX,
+          event.clientY - activeTicket.anchorY,
+        ) <= TICKET_HOVER_SLACK
+      )
+        return;
       const el = event.target.closest?.(
         ".prb-ticket[data-ticket]:not(.prb-ticket-single)",
       );
-      if (el) setActiveTicket(el);
-      else if (activeTicket.key) setActiveTicket(null);
+      if (el) {
+        activeTicket.anchorX = event.clientX;
+        activeTicket.anchorY = event.clientY;
+        setActiveTicket(el);
+      } else if (activeTicket.key) setActiveTicket(null);
     },
     { passive: true },
   );
@@ -1792,6 +1944,61 @@
     });
     openedPrs.clear();
   });
+
+  // One bubble serves every pill and review count, appearing at once where a title would wait a second.
+  // It opens on the side of the row its pill is nearest, so the row's own details stay readable.
+  let bubble;
+  let bubbleTarget = null;
+  function showBubble(target) {
+    if (target === bubbleTarget) return;
+    bubbleTarget = target;
+    if (!bubble) {
+      bubble = element("div", { id: "prb-bubble", className: "prb-bubble" });
+      bubble.setAttribute("role", "tooltip");
+      document.body.append(bubble);
+    }
+    bubble.textContent = target.dataset.prbTip;
+    // An absolute box shrinks to fit right of its old left, so measure it from the edge.
+    bubble.style.left = bubble.style.top = "0px";
+    bubble.style.display = "block";
+    const { clientWidth, clientHeight } = document.documentElement;
+    const pill = target.getBoundingClientRect();
+    const box = bubble.getBoundingClientRect();
+    const row = target.closest("li")?.getBoundingClientRect();
+    const left = Math.min(
+      Math.max(8, pill.left + pill.width / 2 - box.width / 2),
+      clientWidth - box.width - 8,
+    );
+    const fitsAbove = pill.top - 6 - box.height >= 0;
+    const fitsBelow = pill.bottom + 6 + box.height <= clientHeight;
+    const prefersAbove = !row || pill.top + pill.bottom < row.top + row.bottom;
+    const above = prefersAbove
+      ? fitsAbove || !fitsBelow
+      : !fitsBelow && fitsAbove;
+    bubble.style.left = `${left + scrollX}px`;
+    bubble.style.top = `${(above ? pill.top - 6 - box.height : pill.bottom + 6) + scrollY}px`;
+  }
+  function hideBubble() {
+    bubbleTarget = null;
+    if (bubble) bubble.style.display = "none";
+  }
+  // Hiding on any other mouseover also covers a pill replaced by a refresh while hovered.
+  ["mouseover", "focusin"].forEach((type) =>
+    document.addEventListener(type, (event) => {
+      const target = event.target.closest?.("[data-prb-tip]");
+      if (target) showBubble(target);
+      else hideBubble();
+    }),
+  );
+  document.addEventListener("focusout", hideBubble);
+  document.addEventListener("mouseout", (event) => {
+    if (!event.relatedTarget) hideBubble();
+  });
+  window.addEventListener("blur", hideBubble);
+  document.addEventListener("keydown", (event) => {
+    if (event.key === "Escape") hideBubble();
+  });
+  window.addEventListener("scroll", hideBubble, { passive: true });
 
   // ---------- Empty list celebration ----------
   // When a list of PRs waiting on the viewer comes back empty, a small looping animation takes the
@@ -3365,7 +3572,7 @@
   // The script's own renders would otherwise rerun highlight() after every badge update. Removals
   // always count, since that's how a GitHub redraw that drops the badges shows up.
   const OWN_NODES =
-    ".prb-group, .prb-reviews, .prb-ticket, .prb-tg-arrow, #prb-footer, .prb-cel";
+    ".prb-group, .prb-reviews, .prb-ticket, .prb-tg-arrow, #prb-footer, .prb-cel, .prb-bubble";
   function isOwnNode(node) {
     const el = node.nodeType === Node.ELEMENT_NODE ? node : node.parentElement;
     return !!el?.closest(OWN_NODES);

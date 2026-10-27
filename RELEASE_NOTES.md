@@ -1,5 +1,17 @@
 # Release Notes
 
+## 1.7
+
+### Features
+
+- **Line counts show the code change itself.** Generated files, tests, and docs are now left out of the line count badge along with lockfiles. Each has its own **Leave out** toggle under **Line counts**, all on by default, and a PR that only changes left out files, such as a docs-only PR, shows `+0 −0`. `excludeGenerated`, `excludeTests`, and `excludeDocs` in `CONFIG` set the defaults, and `generatedPattern`, `testPattern`, and `docsPattern` decide which files match.
+- **Dashed badge when lines are left out.** Hover it for the exact counts and how many lines of each kind were skipped.
+- **Instant hover text.** Badges, ticket pills, review counts, and the ⚠ show their hover text right away and outside the row, so it no longer covers the row's details. Hovering `✓2` now lists just the approvers.
+
+### Fixes
+
+- **Steadier ticket hover.** Small pointer movements while scrolling no longer clear the dimming or switch it to another ticket.
+
 ## 1.6
 
 - **Something for an empty queue.** Work through every PR waiting on your review, then take another look at the list. It may not be the same twice. Not your thing? Turn off **Celebrate an empty PR list 🎉** in the settings panel.

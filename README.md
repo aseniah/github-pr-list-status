@@ -11,7 +11,7 @@ A userscript that customizes GitHub's pull request list to show more detail at a
 Works on GitHub's global pull request list at `github.com/pulls` (Authored by me, Review requests, Assigned to me, and any search) and on each repository's Pull requests tab.
 
 - **Merge state at a glance.** Badges show what stands between each PR and merging, so you can tell which approved PRs are actually ready. A PR can show several at once, for example both Conflicts and Pipeline.
-- **Diff size.** A `+177 −80` badge shows lines added and deleted. Lockfiles are left out by default so dependency upgrades show the size you'd actually review. Hover for exact numbers and how many lockfile lines were skipped.
+- **Diff size.** A `+177 −80` badge shows lines added and deleted. Lockfiles, generated files, tests, and docs are left out by default so the badge shows the size of the code change itself. The badge gets a dashed border when lines were left out, and hovering it shows exact numbers and how many lines of each kind were skipped. Each kind has its own toggle under **Line counts** in the settings panel.
 - **Who has weighed in.** Under GitHub's comment count, `✓2` counts approvals, `✗1` counts change requests, and a discussion icon counts people who commented without deciding, such as someone asking a question. Hover for names. Pending reviewers who haven't interacted, the PR author, and bots aren't counted.
 - **Re-review requests.** A blue eye at the start of the review counts marks PRs you already reviewed or commented on where the author has asked for your review again, so you know to come back and look at their changes.
 - **Threads waiting on you.** On PRs you opened, a blue reply icon with a count marks unresolved review threads where someone else had the last word and you haven't replied or reacted. Resolve the thread, reply, or react to its latest comment with any emoji to clear it. Hover for details.
@@ -50,7 +50,7 @@ The list page doesn't include these details, so the script fetches them from the
 
 Badges load once when the list appears, and reloading the page always fetches fresh data. Moving between lists without a reload reuses results from the last minute, and at most four PRs load at a time. Waiting thread counts load after the main badges, and only for your own PRs that have comments.
 
-Each PR needs up to five requests with every feature on. A request is skipped when every feature that uses it is off, and **Fewer requests** brings it down to two. Turning a feature off takes effect right away without new requests. Turning one on, or changing **Leave out lockfiles**, refetches the PRs on the page.
+Each PR needs up to five requests with every feature on. A request is skipped when every feature that uses it is off, and **Fewer requests** brings it down to two. Turning a feature off takes effect right away without new requests. Turning one on refetches the PRs on the page. The **Leave out** options under **Line counts** share one file list, so only turning the first of them on refetches, and switching between them after that is instant.
 
 Two things refresh on their own:
 
@@ -72,6 +72,8 @@ You need a userscript manager extension. Once one is installed, open the install
 3. Open the install link above, click the Userscripts icon in the toolbar, and choose **Install**.
 
 You can also download the `.user.js` file and save it into the folder Userscripts is set to use.
+
+If the script stops running after Safari has been open for a while, quit Safari fully (⌘Q) and reopen it. Reloading the page doesn't clear it. So far this has only been seen with Userscripts, and other Safari userscript managers haven't been tested.
 
 ### Chrome, Edge, Brave, Arc, and other Chromium browsers
 
@@ -119,13 +121,18 @@ namedChecks: [
 
 - `ignoredReviewers` leaves accounts out of the review counts. Each entry is an exact login or a regular expression. The defaults skip `[bot]` accounts and Copilot.
 - `excludeLockfiles` sets the default for **Leave out lockfiles** in the settings panel and is on by default. `lockfilePattern` is the regular expression that decides what counts as a lockfile. It covers npm, Yarn, pnpm, Bun, Bundler, Cargo, Composer, Poetry, Pipenv, uv, Go, and Nix.
+- `excludeTests` sets the default for **Leave out tests** in the settings panel and is on by default. `testPattern` is the regular expression that decides what counts as a test. It matches test file names such as `*.test.ts`, `*.spec.js`, `*_test.go`, `test_*.py`, `*_spec.rb`, and `*Test.java`, plus anything under directories such as `__tests__`, `__mocks__`, `__snapshots__`, `test`, `tests`, `spec`, `e2e`, `cypress`, `fixtures`, and `testdata`.
+- `excludeGenerated` sets the default for **Leave out generated files** and is on by default. `generatedPattern` matches only names that code generators always use: protobuf output such as `*.pb.go`, `*_pb.js`, `*_pb.ts`, and `*_pb2.py`, `*.generated.*` files, `*.min.js` and `*.min.css` bundles with their source maps, `zz_generated.*`, `*.g.dart`, `*.freezed.dart`, and `*.Designer.cs`, plus anything under `generated`, `__generated__`, or `dist` directories.
+- `excludeDocs` sets the default for **Leave out docs** and is on by default. `docsPattern` matches Markdown files (`*.md`, `*.mdx`, `*.markdown`), which covers READMEs, changelogs, and agent instruction files such as `AGENTS.md` and `.github/copilot-instructions.md`.
+- A file matching more than one pattern counts toward the first one that's on, in the order lockfiles, generated files, tests, and docs.
 - `flagWaitingThreads` sets the default for **Threads waiting on you** in the settings panel. It's on by default and costs one extra request for each of your PRs that has comments.
 - `cacheMinutes` sets how long results are reused when you move between lists without reloading. Reloading always fetches fresh data. `maxConcurrentPrs` sets how many PRs load at once.
 - `checkingRefreshSeconds` sets how often PRs with running checks refetch while the tab is visible. Set it to `0` to turn this off.
 
 ## Limitations
 
-- Generated files other than lockfiles, such as snapshots or compiled output, still count toward the line totals. Extend `lockfilePattern` to skip them.
+- Generated files that don't follow a generator's standard naming, such as compiled output in a `build` directory, still count toward the line totals. Extend `generatedPattern` to skip them.
+- Tests are matched by path, so test helpers kept outside the usual test directories still count, and non-test code under a directory like `spec/` or `fixtures/` is left out. Adjust `testPattern` to fit your repos.
 - Ticket keys are matched by pattern, so a title like "Target release 2026" or "Use SHA-256" can be marked as a key.
   - Some lookalikes never count. A space between the letters and the number needs three or more digits, which keeps phrases like "Node 22" out, and a second number part rules a match out, so CVE-2024-1234 and ubuntu-22.04 don't count.
   - When a title has more than one key, a dash or underscore beats a space, and a key opened by a paren or bracket, as in `feat(PAY-2210)` or `[PAY-2210]`, beats the same form without one.

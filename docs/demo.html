@@ -112,6 +112,9 @@
   .prb-size { background: var(--bgColor-default, #fff); border-color: var(--borderColor-default, #d1d9e0); color: var(--fgColor-muted, #59636e); font-variant-numeric: tabular-nums; }
   .prb-size .add { color: var(--fgColor-success, #1a7f37); }
   .prb-size .del { color: var(--fgColor-danger, #d1242f); }
+  .prb[data-prb-tip], .prb-review-counts [data-prb-tip] { cursor: default; }
+  .prb-size.prb-trimmed { border-style: dashed; border-color: var(--fgColor-muted, #59636e); }
+  .prb-bubble { display: none; position: absolute; z-index: 100; max-width: 260px; padding: 6px 8px; border: 1px solid var(--borderColor-default, #d1d9e0); border-radius: 6px; background: var(--bgColor-default, #fff); box-shadow: 0 8px 24px rgba(37, 41, 46, 0.12); color: var(--fgColor-default, #1f2328); font-size: 12px; font-weight: 400; line-height: 18px; white-space: pre-line; pointer-events: none; }
   .prb-ready    { background: var(--bgColor-success-emphasis, #1a7f37); color: var(--fgColor-onEmphasis, #fff); }
   .prb-behind   { background: var(--bgColor-attention-muted, #fff8c5); border-color: var(--borderColor-attention-emphasis, #d4a72c); color: var(--fgColor-attention, #9a6700); }
   .prb-conflict, .prb-failing { background: var(--bgColor-danger-muted, #ffebe9); border-color: var(--borderColor-danger-muted, #ff818266); color: var(--fgColor-danger, #d1242f); }
@@ -279,34 +282,34 @@
   }
   setTheme(matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
   const P = {
-    ready: ['prb-ready', '✓ Ready'],
-    behind: ['prb-behind', '↻ Behind'],
-    conflicts: ['prb-conflict', '⚠ Conflicts'],
-    pipeline: ['prb-release', '🔒 Pipeline'],
-    failing2: ['prb-failing', '✗ 2 failing'],
-    failing: ['prb-failing', '✗ Failing'],
-    checking: ['prb-running', '● Checking<span class="prb-dots"><span>.</span><span>.</span><span>.</span></span>'],
-    blocked: ['prb-blocked', 'Blocked'],
+    ready: ['prb-ready', '✓ Ready', 'Approved, checks passing, up to date'],
+    behind: ['prb-behind', '↻ Behind', 'Branch is behind the base branch and needs updating'],
+    conflicts: ['prb-conflict', '⚠ Conflicts', 'Merge conflict with the base branch'],
+    pipeline: ['prb-release', '🔒 Pipeline', 'Release Check: Waiting on a release window'],
+    failing2: ['prb-failing', '✗ 2 failing', 'Failing: lint, unit-tests'],
+    failing: ['prb-failing', '✗ Failing', 'Some checks are failing'],
+    checking: ['prb-running', '● Checking<span class="prb-dots"><span>.</span><span>.</span><span>.</span></span>', 'Pending: build, integration-tests'],
+    blocked: ['prb-blocked', 'Blocked', 'Approved but blocked by a merge requirement'],
   };
   const rows = [
-    { title: 'feat(UI-218): Add dark mode toggle to the settings page', repo: 'acme/web-app#412', author: 'Sam Ortiz (sortiz)', reviews: { ok: ['Dana'], cmt: ['Priya'] }, opened: '3 hours ago', review: 'Review required', checks: [6, 6], pills: [], add: '+214', del: '−38', comments: 2, bg: '', failure: 'GitHub rate limited this request' },
+    { title: 'feat(UI-218): Add dark mode toggle to the settings page', repo: 'acme/web-app#412', author: 'Sam Ortiz (sortiz)', reviews: { ok: ['Dana'], cmt: ['Priya'] }, opened: '3 hours ago', review: 'Review required', checks: [6, 6], pills: [], add: '+214', del: '−38', tests: [142, 3], comments: 2, bg: '', failure: 'GitHub rate limited this request' },
     { title: 'chore(PLAT-310): Bump Node to the current LTS release', repo: 'acme/build-tools#57', author: 'Lee Park (lpark)', opened: '5 hours ago', review: 'Review required', checks: [4, 4], loading: true, comments: 0, bg: '' },
     { title: 'fix: Retry webhook deliveries on 5xx responses', repo: 'acme/notifications#88', author: 'Dana Kim (dkim)', reviews: { ok: ['Sam', 'Priya'] }, opened: '2 days ago', review: 'Approved', checks: [9, 9], pills: ['ready'], add: '+96', del: '−12', comments: 5, bg: GREEN },
-    { title: 'chore: Upgrade shared libraries to the latest minor versions', repo: 'acme/billing-api#301', author: 'Lee Park (lpark)', reviews: { ok: ['Sam', 'Priya'], cmt: ['Dana'] }, opened: '2 days ago', review: 'Approved', checks: [12, 12], pills: ['behind'], add: '+1.2k', del: '−840', addAll: '+4.9k', delAll: '−3.6k', comments: 3, bg: GREEN,
+    { title: 'chore: Upgrade shared libraries to the latest minor versions', repo: 'acme/billing-api#301', author: 'Lee Park (lpark)', reviews: { ok: ['Sam', 'Priya'], cmt: ['Dana'] }, opened: '2 days ago', review: 'Approved', checks: [12, 12], pills: ['behind'], add: '+1.2k', del: '−840', lockfiles: [3700, 2760], tests: [180, 24], comments: 3, bg: GREEN,
       cycle: [
         { ms: 3500, pills: ['checking'] },
         { ms: 4000, pills: ['behind'] },
       ] },
-    { title: 'feat: Paginate the audit log export', repo: 'acme/admin-console#157', author: 'Priya Shah (pshah)', reviews: { ok: ['Sam', 'Dana'] }, opened: '2 days ago', review: 'Approved', checks: [7, 8], pills: ['pipeline'], add: '+388', del: '−45', comments: 8, bg: GREEN },
-    { title: 'refactor(ORD-4471): Split the order service into read and write paths', repo: 'acme/orders#529', author: 'Morgan Ellis (mellis)', reviews: { ok: ['Priya', 'Dana', 'Lee'], cmt: ['Sam'] }, opened: '3 days ago', review: 'Approved', checks: [6, 8], pills: ['failing2'], add: '+2.1k', del: '−1.7k', comments: 14, bg: GREEN },
+    { title: 'feat: Paginate the audit log export', repo: 'acme/admin-console#157', author: 'Priya Shah (pshah)', reviews: { ok: ['Sam', 'Dana'] }, opened: '2 days ago', review: 'Approved', checks: [7, 8], pills: ['pipeline'], add: '+388', del: '−45', lockfiles: [96, 41], docs: [24, 3], comments: 8, bg: GREEN },
+    { title: 'refactor(ORD-4471): Split the order service into read and write paths', repo: 'acme/orders#529', author: 'Morgan Ellis (mellis)', reviews: { ok: ['Priya', 'Dana', 'Lee'], cmt: ['Sam'] }, opened: '3 days ago', review: 'Approved', checks: [6, 8], pills: ['failing2'], add: '+2.1k', del: '−1.7k', generated: [860, 540], comments: 14, bg: GREEN },
     { title: 'fix: Handle a missing timezone in the scheduler', repo: 'acme/scheduler#73', author: 'Priya Shah (pshah)', reviews: { ok: ['Dana', 'Sam'] }, opened: '4 days ago', review: 'Approved', checks: [5, 6], pending: true, pills: ['checking'], add: '+27', del: '−4', comments: 1, bg: GREEN,
       // Loops between running checks and the result so the demo shows the transition.
       cycle: [
         { ms: 4000, checks: [5, 6], pending: true, pills: ['checking'] },
         { ms: 3000, checks: [6, 6], pending: false, pills: ['ready'] },
       ] },
-    { title: 'feat: Add CSV import for contacts', repo: 'acme/crm#240', author: 'Lee Park (lpark)', reviews: { ok: ['Sam', 'Priya', 'Dana'] }, opened: '5 days ago', review: 'Approved', checks: [7, 8], pills: ['conflicts', 'pipeline'], add: '+563', del: '−91', comments: 6, bg: GREEN },
-    { title: 'docs(plat-310): Document the local development setup', repo: 'acme/platform-docs#19', author: 'Sam Ortiz (sortiz)', reviews: { ok: ['Dana', 'Priya'] }, opened: '6 days ago', review: 'Approved', checks: [3, 3], pills: ['blocked'], add: '+142', del: '−0', comments: 2, bg: GREEN },
+    { title: 'feat: Add CSV import for contacts', repo: 'acme/crm#240', author: 'Lee Park (lpark)', reviews: { ok: ['Sam', 'Priya', 'Dana'] }, opened: '5 days ago', review: 'Approved', checks: [7, 8], pills: ['conflicts', 'pipeline'], add: '+563', del: '−91', tests: [347, 6], comments: 6, bg: GREEN },
+    { title: 'docs(plat-310): Document the local development setup', repo: 'acme/platform-docs#19', author: 'Sam Ortiz (sortiz)', reviews: { ok: ['Dana', 'Priya'] }, opened: '6 days ago', review: 'Approved', checks: [3, 3], pills: ['blocked'], add: '+0', del: '−0', docs: [142, 0], comments: 2, bg: GREEN },
     { title: 'UI-218 Fix the search input contrast in dark mode', repo: 'acme/web-app#398', author: 'Morgan Ellis (mellis)', reviews: { reRequested: true, ok: ['Dana'], chg: ['Jordan'], cmt: ['Sam', 'Lee'] }, opened: 'last week', review: 'Changes requested', checks: [6, 6], pills: ['behind'], add: '+18', del: '−6', comments: 4, bg: YELLOW },
     { title: 'chore: Remove expired feature flags', repo: 'acme/web-app#371', author: 'Riley Chen (rchen)', reviews: { reRequested: true, cmt: ['Jordan', 'Dana'] }, opened: '3 weeks ago', review: 'Review required', checks: [6, 6], pills: [], add: '+12', del: '−240', comments: 1, bg: ORANGE },
     { title: 'feat: Experimental GraphQL gateway', repo: 'acme/gateway#12', author: 'Riley Chen (rchen)', reviews: { cmt: ['Sam', 'Priya', 'Dana'] }, opened: 'on Aug 25', review: 'Review required', checks: [4, 4], pills: ['conflicts'], add: '+3.4k', del: '−120', comments: 21, bg: RED },
@@ -321,7 +324,7 @@
     { title: 'refactor(PRICE-77): Extract the pricing rules engine', repo: 'acme/billing-api#318', author: ME, reviews: { cmt: ['Dana'], waiting: 1 }, opened: '3 days ago', review: 'Review required', checks: [9, 9], pills: [], add: '+1.4k', del: '−960', comments: 2, bg: '' },
     { title: 'API-902 Document the public API rate limits', repo: 'acme/platform-docs#22', author: ME, opened: '4 days ago', review: 'Review required', checks: [2, 2], pills: [], add: '+88', del: '−0', comments: 0, bg: '' },
     { title: 'feat: Bulk archive for stale projects', repo: 'acme/admin-console#163', author: ME, reviews: { ok: ['Riley'] }, opened: '5 days ago', review: 'Approved', checks: [7, 7], pills: ['behind'], add: '+205', del: '−31', comments: 1, bg: GREEN },
-    { title: 'feat: Verify webhook signatures', repo: 'acme/notifications#94', author: ME, reviews: { chg: ['Dana'], cmt: ['Sam', 'Lee'], waiting: 4, overLimit: 1 }, opened: 'last week', review: 'Changes requested', checks: [6, 6], pills: ['behind'], add: '+512', del: '−64', comments: 17, bg: YELLOW },
+    { title: 'feat: Verify webhook signatures', repo: 'acme/notifications#94', author: ME, reviews: { chg: ['Dana'], cmt: ['Sam', 'Lee'], waiting: 4, overLimit: 1 }, opened: 'last week', review: 'Changes requested', checks: [6, 6], pills: ['behind'], add: '+512', del: '−64', tests: [268, 0], comments: 17, bg: YELLOW },
   ];
   // Related tickets. A full 25-row page so some related rows sit off screen. Key formats vary on purpose.
   const tr = (title, repo, author, opened, extra = {}) => ({ title, repo, author, opened, review: 'Review required', checks: [4, 4], pills: [], add: '+24', del: '−6', comments: 0, bg: '', ...extra });
@@ -349,7 +352,7 @@
     tr('Feature/web 381 search input styles', 'acme/design-system#140', MORGAN, '5 days ago', { reviews: { cmt: ['Jordan'] }, add: '+52', del: '−20', comments: 2 }),
     tr('perf: Cache the feature flag lookups', 'acme/gateway#42', RILEY, '5 days ago', { add: '+77', del: '−15' }),
     tr('feat(CRM-740): Add a contact owner filter', 'acme/crm#255', DANA, '6 days ago', { add: '+90', del: '−4' }),
-    tr('test: Cover the invoice rounding cases', 'acme/billing-api#347', SAM, 'last week', { add: '+140', del: '−0', bg: YELLOW }),
+    tr('test: Cover the invoice rounding cases', 'acme/billing-api#347', SAM, 'last week', { add: '+0', del: '−0', tests: [140, 0], bg: YELLOW }),
     tr('feat(pay-2210): add currency filter to invoices request', 'acme/billing-client#77', DANA, 'last week', { pills: ['behind'], add: '+71', del: '−5', bg: YELLOW }),
     tr('chore: Rename the staging buckets', 'acme/platform-docs#29', PRIYA, 'last week', { add: '+14', del: '−14', bg: YELLOW }),
     tr('fix: Escape quotes in CSV exports', 'acme/admin-console#172', MORGAN, '2 weeks ago', { add: '+11', del: '−3', bg: ORANGE }),
@@ -414,7 +417,7 @@
     const href = ticketSearchUrl(t.key, currentRows());
     return {
       key: single ? undefined : t.key,
-      pill: `<a class="${cls}" href="${href}" target="_blank" rel="noopener" data-ticket="${t.key}" title="${tip}">${t.key}</a>`,
+      pill: `<a class="${cls}" href="${href}" target="_blank" rel="noopener" data-ticket="${t.key}"${tipAttrs(tip)}>${t.key}</a>`,
     };
   }
 
@@ -436,15 +439,14 @@
     const parts = [['ok', '✓', 'Approved'], ['chg', '✗', 'Changes requested'], ['cmt', discussionIcon, 'Commented']]
       .filter(([k]) => rv[k]?.length);
     if (!parts.length && !rv.waiting) return '<span class="prb-reviews"></span>';
-    const waitingTip = rv.waiting
-      ? [`${rv.waiting} unresolved ${rv.waiting === 1 ? 'thread is' : 'threads are'} waiting on your reply or reaction` +
-        (rv.overLimit ? ` (${rv.overLimit} too long to check, counted to be safe)` : '')]
-      : [];
-    const tip = [...waitingTip, ...(rv.reRequested ? ['Your review was re-requested'] : []),
-      ...parts.map(([k, , label]) => `${label}: ${rv[k].join(', ')}`)].join('\n');
-    return `<span class="prb-reviews"><span class="prb-review-counts" title="${tip}">` +
-      (rv.waiting ? waitingBadge(rv.waiting) : '') + (rv.reRequested ? reRequestIcon : '') +
-      parts.map(([k, icon]) => `<span class="${k}">${icon}${rv[k].length}</span>`).join('') + '</span></span>';
+    const waitingTip = `${rv.waiting} unresolved ${rv.waiting === 1 ? 'thread is' : 'threads are'} waiting on your reply or reaction` +
+      (rv.overLimit ? ` (${rv.overLimit} too long to check, counted to be safe)` : '');
+    // Adds the bubble's attributes to a sample's outer span.
+    const withTip = (html, tip) => html.replace(/^<span class="[^"]*"/, (open) => open + tipAttrs(tip));
+    return '<span class="prb-reviews"><span class="prb-review-counts">' +
+      (rv.waiting ? withTip(waitingBadge(rv.waiting), waitingTip) : '') +
+      (rv.reRequested ? withTip(reRequestIcon, 'Your review was re-requested') : '') +
+      parts.map(([k, icon, label]) => `<span class="${k}"${tipAttrs(`${label}: ${rv[k].join(', ')}`)}>${icon}${rv[k].length}</span>`).join('') + '</span></span>';
   }
 
   // Settings mockup. The script would store only differences from these defaults in localStorage.
@@ -454,13 +456,16 @@
     ['mergeState', 'Merge state', 'Ready, Behind, Conflicts, and Blocked. Shares a request with review counts.'],
     ['checks', 'Check details', 'Failing counts, named checks, and running checks. 1 request per PR.'],
     ['lineCounts', 'Line counts', 'Lines added and deleted. 1 request per PR.'],
-    ['excludeLockfiles', 'Leave out lockfiles', 'Lists every file in the PR, so it costs more on large PRs.', 'lineCounts'],
+    ['excludeLockfiles', 'Leave out lockfiles', 'Lists every file in the PR, so it costs more on large PRs. The Leave out options share that list.', 'lineCounts'],
+    ['excludeGenerated', 'Leave out generated files', 'Protobuf output, minified bundles, and generated or dist folders.', 'lineCounts'],
+    ['excludeTests', 'Leave out tests', 'Tests, mocks, fixtures, and snapshots.', 'lineCounts'],
+    ['excludeDocs', 'Leave out docs', 'Markdown, including READMEs and agent instructions.', 'lineCounts'],
     ['reviewCounts', 'Review counts', 'Approvals and change requests. Shares a request with merge state.'],
     ['commenters', 'Commenters and re-review', 'Commenter count and the re-review eye. 1 request per PR.'],
     ['waitingThreads', 'Threads waiting on you', 'On your PRs only. 1 request per PR with comments.'],
     ['celebration', 'Celebrate an empty PR list 🎉', 'A surprise when no PRs are waiting on your review.'],
   ];
-  const LIGHT_OFF = ['checks', 'excludeLockfiles', 'commenters', 'waitingThreads'];
+  const LIGHT_OFF = ['checks', 'excludeLockfiles', 'excludeGenerated', 'excludeTests', 'excludeDocs', 'commenters', 'waitingThreads'];
   const settings = Object.fromEntries(FEATURES.map(([k]) => [k, true]));
   // tnguyen is saved but has no PR in either view, so the panel shows the login alone.
   const highlighted = new Set(['dkim', 'tnguyen']);
@@ -500,18 +505,48 @@
     };
   }
 
+  // Display strings like +1.2k stand in for the exact numbers the script has.
+  const lines = (text = '+0') => Math.round(parseFloat(text.slice(1)) * (text.endsWith('k') ? 1000 : 1));
+  const formatCount = (n) => n < 1000 ? String(n) : `${(n / 1000).toFixed(1).replace(/\.0$/, '')}k`;
+  const escapeAttr = (text) => text.replace(/&/g, '&amp;').replace(/"/g, '&quot;');
+  const tipAttrs = (tip) => ` aria-description="${escapeAttr(tip)}" data-prb-tip="${escapeAttr(tip)}"`;
+  // Each filter's row field holds the [added, deleted] lines its toggle leaves out.
+  const LINE_FILTERS = [
+    ['excludeLockfiles', 'lockfiles', 'lockfile'],
+    ['excludeGenerated', 'generated', 'generated'],
+    ['excludeTests', 'tests', 'test'],
+    ['excludeDocs', 'docs', 'doc'],
+  ];
+  const listOf = (items, conjunction) => items.length < 3 ? items.join(` ${conjunction} `)
+    : `${items.slice(0, -1).join(', ')}, ${conjunction} ${items.at(-1)}`;
+  function sizeCounts(r) {
+    const present = LINE_FILTERS.filter(([, field]) => r[field]);
+    const counted = present.filter(([key]) => !settings[key]).map(([, field]) => r[field]);
+    const counts = present.filter(([key]) => settings[key]).map(([, field, noun]) => [r[field][0] + r[field][1], noun]);
+    const skipped = counts.map(([n, noun]) => `${n} ${noun}`);
+    const line = counts.length === 1 && counts[0][0] === 1 ? 'line' : 'lines';
+    const add = lines(r.add) + counted.reduce((sum, [a]) => sum + a, 0);
+    const del = lines(r.del) + counted.reduce((sum, [, d]) => sum + d, 0);
+    return {
+      add: counted.length ? `+${formatCount(add)}` : r.add,
+      del: counted.length ? `−${formatCount(del)}` : r.del,
+      trimmed: skipped.length > 0,
+      tip: `+${add} added, −${del} deleted` + (skipped.length ? `\n${listOf(skipped, 'and')} ${line} not counted` : ''),
+    };
+  }
+
   function renderRow(r) {
     if (r.failed) r = { ...r, reviews: undefined };
     const tk = ticketParts(r, ticketGroups(currentRows()));
-    const all = !settings.excludeLockfiles && r.addAll;
+    const { add, del, trimmed, tip } = sizeCounts(r);
     const size = settings.lineCounts
-      ? `<span class="prb prb-size"><span class="add">${all ? r.addAll : r.add}</span> <span class="del">${all ? r.delAll : r.del}</span></span>`
+      ? `<span class="prb prb-size${trimmed ? ' prb-trimmed' : ''}"${tipAttrs(tip)}><span class="add">${add}</span> <span class="del">${del}</span></span>`
       : '';
     const pills = r.failed
-      ? `<span class="prb-error" title="PR List Status couldn't load all of this PR's details. ${r.failed}.">⚠</span>`
+      ? `<span class="prb-error"${tipAttrs(`PR List Status couldn't load all of this PR's details. ${r.failed}.`)}>⚠</span>`
       : r.loading
       ? '<span class="prb prb-loading"><span class="prb-spinner"></span></span>'
-      : visiblePills(r.pills).map(k => `<span class="prb ${P[k][0]}">${P[k][1]}</span>`).join('') + size;
+      : visiblePills(r.pills).map(k => `<span class="prb ${P[k][0]}"${tipAttrs(P[k][2])}>${P[k][1]}</span>`).join('') + size;
     const passing = r.checks[0] === r.checks[1];
     const mark = r.pending ? '' : passing ? '<span class="pass">✓</span>' : '<span class="fail">✗</span>';
     const bg = !settings.rowColors ? 'transparent' : r.state ? DONE : r.bg || 'transparent';
@@ -611,7 +646,8 @@
         [badge('checking'), 'Checks are running, or GitHub is still checking whether it can merge'],
         [badge('blocked'), 'Approved, but a merge requirement is still unmet'],
         [badge('pipeline'), 'Release Check is failing'],
-        ['<span class="prb prb-size"><span class="add">+96</span> <span class="del">−12</span></span>', 'Lines added and deleted, not counting lockfiles'],
+        ['<span class="prb prb-size"><span class="add">+96</span> <span class="del">−12</span></span>', 'Lines added and deleted, not counting lockfiles, generated files, tests, or docs'],
+        ['<span class="prb prb-size prb-trimmed"><span class="add">+96</span> <span class="del">−12</span></span>', 'Dashed when files were left out. Hover for how many lines.'],
         ['<span class="prb-error">⚠</span>', 'Some details didn\'t load. Hover for why.'],
         ['<span class="prb-hl prb-hl-solid" id="legendAuthor">John Doe (jdoe)</span>', 'An author you chose to highlight'],
         ['<span class="prb-ticket prb-tg-0">ABC-123</span>', 'A ticket key: other PRs on this page share it. Hover to find them, click to search every PR that mentions it.'],
@@ -663,7 +699,8 @@
 
   // Hovering a key activates its group. Scrolling keeps it active: browsers fire mouse events at an unchanged
   // clientX/Y after a scroll, so only real pointer movement away from the key ends it.
-  const tg = { key: null, color: '', row: null, x: -1, y: -1 };
+  const tg = { key: null, color: '', row: null, x: -1, y: -1, anchorX: -1, anchorY: -1 };
+  const TICKET_HOVER_SLACK = 10;
   const tgUp = document.getElementById('tgUp'), tgDown = document.getElementById('tgDown');
   const groupRows = () => [...list.children].filter(li => tg.key && li.dataset.prbTicket === tg.key);
 
@@ -691,9 +728,12 @@
   document.addEventListener('mousemove', (e) => {
     if (e.clientX === tg.x && e.clientY === tg.y) return;
     tg.x = e.clientX; tg.y = e.clientY;
+    if (tg.key && Math.hypot(e.clientX - tg.anchorX, e.clientY - tg.anchorY) <= TICKET_HOVER_SLACK) return;
     const keyEl = e.target.closest('.prb-ticket:not(.prb-ticket-single)');
-    if (keyEl) setActive(keyEl.dataset.ticket, getComputedStyle(keyEl).getPropertyValue('--prb-tg').trim(), keyEl.closest('li'));
-    else if (tg.key) setActive(null, '');
+    if (keyEl) {
+      tg.anchorX = e.clientX; tg.anchorY = e.clientY;
+      setActive(keyEl.dataset.ticket, getComputedStyle(keyEl).getPropertyValue('--prb-tg').trim(), keyEl.closest('li'));
+    } else if (tg.key) setActive(null, '');
   });
   addEventListener('scroll', () => tg.key && updateIndicators(), { passive: true });
   addEventListener('resize', () => tg.key && updateIndicators());
@@ -748,6 +788,42 @@
     };
     step();
   });
+  // One bubble serves every size pill, appearing at once where a title would wait a second.
+  const bubble = document.createElement('div');
+  bubble.id = 'prb-bubble';
+  bubble.className = 'prb-bubble';
+  bubble.setAttribute('role', 'tooltip');
+  document.body.append(bubble);
+  let bubbleTarget = null;
+  function showBubble(target) {
+    if (target === bubbleTarget) return;
+    bubbleTarget = target;
+    bubble.textContent = target.dataset.prbTip;
+    bubble.style.left = bubble.style.top = '0px';
+    bubble.style.display = 'block';
+    const { clientWidth, clientHeight } = document.documentElement;
+    const pill = target.getBoundingClientRect();
+    const box = bubble.getBoundingClientRect();
+    const row = target.closest('li')?.getBoundingClientRect();
+    const left = Math.min(Math.max(8, pill.left + pill.width / 2 - box.width / 2), clientWidth - box.width - 8);
+    const fitsAbove = pill.top - 6 - box.height >= 0;
+    const fitsBelow = pill.bottom + 6 + box.height <= clientHeight;
+    const prefersAbove = !row || pill.top + pill.bottom < row.top + row.bottom;
+    const above = prefersAbove ? fitsAbove || !fitsBelow : !fitsBelow && fitsAbove;
+    bubble.style.left = `${left + scrollX}px`;
+    bubble.style.top = `${(above ? pill.top - 6 - box.height : pill.bottom + 6) + scrollY}px`;
+  }
+  const hideBubble = () => { bubbleTarget = null; bubble.style.display = 'none'; };
+  ['mouseover', 'focusin'].forEach((type) => document.addEventListener(type, (e) => {
+    const target = e.target.closest?.('[data-prb-tip]');
+    if (target) showBubble(target);
+    else hideBubble();
+  }));
+  document.addEventListener('focusout', hideBubble);
+  document.addEventListener('mouseout', (e) => { if (!e.relatedTarget) hideBubble(); });
+  addEventListener('blur', hideBubble);
+  document.addEventListener('keydown', (e) => { if (e.key === 'Escape') hideBubble(); });
+  addEventListener('scroll', hideBubble, { passive: true });
 </script>
 </body>
 </html>

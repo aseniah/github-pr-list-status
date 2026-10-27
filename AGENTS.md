@@ -35,4 +35,4 @@ The script runs on GitHub internals that are undocumented and change without not
 - GitHub's CSP blocks inline event handlers, so script UI is built with `createElement` and `addEventListener`. Author names come from the page and go in through `textContent`, never `innerHTML`.
 - Every panel feature maps to the endpoints it needs in `loadPrInfo`, and **Fewer requests** must stay at `diffstat` plus `merge_box`, since the README and the panel's info popup promise two requests per PR.
 - User-facing changes update the README's Features and Configuration sections and bump `@version`.
-- `RELEASE_NOTES.md` covers only what changes for someone running the script. Updates to the demo, screenshots, or docs stay out of it.
+- `RELEASE_NOTES.md` covers only what changes for someone running the script. Updates to the demo, screenshots, or docs stay out of it. From 1.7 on, each release splits its bullets under `### Features` and `### Fixes`, leaving out a heading with nothing under it, and stays short, leaving the details to the README.

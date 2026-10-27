@@ -1,5 +1,11 @@
 # Release Notes
 
+## 1.7.1
+
+### Features
+
+- **Striped drafts.** Draft PRs keep their age or approval color and get faint diagonal stripes, so they stand out from PRs ready for review. Turning off **Row colors** turns them off too.
+
 ## 1.7
 
 ### Features

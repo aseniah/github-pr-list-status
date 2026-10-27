@@ -99,13 +99,14 @@
   .mock-bar[hidden] { display: none; }
   .pr-icon.merged { color: var(--fgColor-done); }
   .pr-icon.closed { color: var(--fgColor-danger); }
+  .pr-icon.draft { color: var(--fgColor-muted); }
   .mock-bar button { padding: 0; border: 0; background: none; font: inherit; color: var(--fgColor-accent); cursor: pointer; }
 
   /* Copied from the userscript */
-  :root { --prb-row-yellow: #fff8c5; --prb-row-orange: #ffd8b1; --prb-row-red: #ffd0d0; --prb-row-green: #c8f5c8; --prb-hl-solid: #6e7781; --prb-tg-0: #0969da; --prb-tg-1: #8250df; --prb-tg-2: #bf3989; --prb-tg-3: #1b7c83; --prb-tg-4: #bc4c00; --prb-tg-5: #6e7781; }
-  [data-color-mode="dark"] { --prb-row-yellow: #2f2a05; --prb-row-orange: #3d1f0d; --prb-row-red: #3c0614; --prb-row-green: #122117; --prb-hl-solid: #6e7681; --prb-tg-0: #4493f8; --prb-tg-1: #ab7df8; --prb-tg-2: #db61a2; --prb-tg-3: #39c5cf; --prb-tg-4: #db6d28; --prb-tg-5: #9198a1; }
+  :root { --prb-row-yellow: #fff8c5; --prb-row-orange: #ffd8b1; --prb-row-red: #ffd0d0; --prb-row-green: #c8f5c8; --prb-hl-solid: #6e7781; --prb-tg-0: #0969da; --prb-tg-1: #8250df; --prb-tg-2: #bf3989; --prb-tg-3: #1b7c83; --prb-tg-4: #bc4c00; --prb-tg-5: #6e7781; --prb-draft-stripe: rgba(31, 35, 40, 0.05); }
+  [data-color-mode="dark"] { --prb-row-yellow: #2f2a05; --prb-row-orange: #3d1f0d; --prb-row-red: #3c0614; --prb-row-green: #122117; --prb-hl-solid: #6e7681; --prb-tg-0: #4493f8; --prb-tg-1: #ab7df8; --prb-tg-2: #db61a2; --prb-tg-3: #39c5cf; --prb-tg-4: #db6d28; --prb-tg-5: #9198a1; --prb-draft-stripe: rgba(240, 246, 252, 0.05); }
   @media (prefers-color-scheme: dark) {
-    [data-color-mode="auto"] { --prb-row-yellow: #2f2a05; --prb-row-orange: #3d1f0d; --prb-row-red: #3c0614; --prb-row-green: #122117; --prb-hl-solid: #6e7681; --prb-tg-0: #4493f8; --prb-tg-1: #ab7df8; --prb-tg-2: #db61a2; --prb-tg-3: #39c5cf; --prb-tg-4: #db6d28; --prb-tg-5: #9198a1; }
+    [data-color-mode="auto"] { --prb-row-yellow: #2f2a05; --prb-row-orange: #3d1f0d; --prb-row-red: #3c0614; --prb-row-green: #122117; --prb-hl-solid: #6e7681; --prb-tg-0: #4493f8; --prb-tg-1: #ab7df8; --prb-tg-2: #db61a2; --prb-tg-3: #39c5cf; --prb-tg-4: #db6d28; --prb-tg-5: #9198a1; --prb-draft-stripe: rgba(240, 246, 252, 0.05); }
   }
   .prb-group { float: right; display: inline-flex; gap: 6px; margin: 2px 16px 0 12px; }
   .prb { display: inline-flex; align-items: center; gap: 4px; font-size: 12px; font-weight: 500; line-height: 18px; padding: 0 7px; border-radius: 2em; border: 1px solid transparent; white-space: nowrap; }
@@ -180,6 +181,8 @@
   .prb-ticket:hover { text-decoration: underline; }
   .prb-ticket.prb-ticket-single { --prb-tg: var(--fgColor-muted, #59636e); background: var(--bgColor-default, #fff); }
   .prb-legend .prb-ticket { margin-right: 0; }
+  /* A 45° tile holds two stripe periods of 6px stripes and 10px gaps, so its side is 16px × √2. */
+  .prb-draft { background-image: linear-gradient(45deg, var(--prb-draft-stripe) 0 18.75%, transparent 18.75% 50%, var(--prb-draft-stripe) 50% 68.75%, transparent 68.75% 100%); background-size: 22.627px 22.627px; background-origin: border-box; }
   .prb-tg-dim > li { transition: opacity 0.12s; }
   .prb-tg-dim > li:not(.prb-tg-hot) { opacity: 0.4; }
   .prb-tg-arrow { position: fixed; left: 50%; z-index: 100; display: inline-flex; align-items: center; padding: 4px 12px; border: 1px solid var(--prb-tg); border-radius: 2em; background: var(--bgColor-default, #fff); color: var(--prb-tg); font: inherit; font-size: 12px; font-weight: 600; box-shadow: 0 4px 12px rgba(37, 41, 46, 0.18); pointer-events: none; animation: prb-tg-bounce 1.2s ease-in-out infinite; }
@@ -311,8 +314,8 @@
     { title: 'feat: Add CSV import for contacts', repo: 'acme/crm#240', author: 'Lee Park (lpark)', reviews: { ok: ['Sam', 'Priya', 'Dana'] }, opened: '5 days ago', review: 'Approved', checks: [7, 8], pills: ['conflicts', 'pipeline'], add: '+563', del: '−91', tests: [347, 6], comments: 6, bg: GREEN },
     { title: 'docs(plat-310): Document the local development setup', repo: 'acme/platform-docs#19', author: 'Sam Ortiz (sortiz)', reviews: { ok: ['Dana', 'Priya'] }, opened: '6 days ago', review: 'Approved', checks: [3, 3], pills: ['blocked'], add: '+0', del: '−0', docs: [142, 0], comments: 2, bg: GREEN },
     { title: 'UI-218 Fix the search input contrast in dark mode', repo: 'acme/web-app#398', author: 'Morgan Ellis (mellis)', reviews: { reRequested: true, ok: ['Dana'], chg: ['Jordan'], cmt: ['Sam', 'Lee'] }, opened: 'last week', review: 'Changes requested', checks: [6, 6], pills: ['behind'], add: '+18', del: '−6', comments: 4, bg: YELLOW },
-    { title: 'chore: Remove expired feature flags', repo: 'acme/web-app#371', author: 'Riley Chen (rchen)', reviews: { reRequested: true, cmt: ['Jordan', 'Dana'] }, opened: '3 weeks ago', review: 'Review required', checks: [6, 6], pills: [], add: '+12', del: '−240', comments: 1, bg: ORANGE },
-    { title: 'feat: Experimental GraphQL gateway', repo: 'acme/gateway#12', author: 'Riley Chen (rchen)', reviews: { cmt: ['Sam', 'Priya', 'Dana'] }, opened: 'on Aug 25', review: 'Review required', checks: [4, 4], pills: ['conflicts'], add: '+3.4k', del: '−120', comments: 21, bg: RED },
+    { draft: true, title: 'chore: Remove expired feature flags', repo: 'acme/web-app#371', author: 'Riley Chen (rchen)', reviews: { reRequested: true, cmt: ['Jordan', 'Dana'] }, opened: '3 weeks ago', review: 'Review required', checks: [6, 6], pills: [], add: '+12', del: '−240', comments: 1, bg: ORANGE },
+    { draft: true, title: 'feat: Experimental GraphQL gateway', repo: 'acme/gateway#12', author: 'Riley Chen (rchen)', reviews: { cmt: ['Sam', 'Priya', 'Dana'] }, opened: 'on Aug 25', review: 'Review required', checks: [4, 4], pills: ['conflicts'], add: '+3.4k', del: '−120', comments: 21, bg: RED },
   ];
 
   // The viewer is Jordan. waiting counts unresolved threads where someone else spoke last and Jordan hasn't reacted.
@@ -322,7 +325,7 @@
     { title: 'fix: Close idle database connections', repo: 'acme/orders#541', author: ME, reviews: { ok: ['Priya', 'Lee'], waiting: 1 }, opened: '2 days ago', review: 'Approved', checks: [8, 8], pills: ['ready'], add: '+41', del: '−9', comments: 4, bg: GREEN },
     { title: 'chore: Migrate CI to the shared workflow', repo: 'acme/build-tools#61', author: ME, reviews: { ok: ['Morgan'], cmt: ['Sam'] }, opened: '3 days ago', review: 'Approved', checks: [4, 4], pills: ['ready'], add: '+77', del: '−130', comments: 3, bg: GREEN },
     { title: 'refactor(PRICE-77): Extract the pricing rules engine', repo: 'acme/billing-api#318', author: ME, reviews: { cmt: ['Dana'], waiting: 1 }, opened: '3 days ago', review: 'Review required', checks: [9, 9], pills: [], add: '+1.4k', del: '−960', comments: 2, bg: '' },
-    { title: 'API-902 Document the public API rate limits', repo: 'acme/platform-docs#22', author: ME, opened: '4 days ago', review: 'Review required', checks: [2, 2], pills: [], add: '+88', del: '−0', comments: 0, bg: '' },
+    { draft: true, title: 'API-902 Document the public API rate limits', repo: 'acme/platform-docs#22', author: ME, opened: '4 days ago', review: 'Review required', checks: [2, 2], pills: [], add: '+88', del: '−0', comments: 0, bg: '' },
     { title: 'feat: Bulk archive for stale projects', repo: 'acme/admin-console#163', author: ME, reviews: { ok: ['Riley'] }, opened: '5 days ago', review: 'Approved', checks: [7, 7], pills: ['behind'], add: '+205', del: '−31', comments: 1, bg: GREEN },
     { title: 'feat: Verify webhook signatures', repo: 'acme/notifications#94', author: ME, reviews: { chg: ['Dana'], cmt: ['Sam', 'Lee'], waiting: 4, overLimit: 1 }, opened: 'last week', review: 'Changes requested', checks: [6, 6], pills: ['behind'], add: '+512', del: '−64', tests: [268, 0], comments: 17, bg: YELLOW },
   ];
@@ -424,6 +427,7 @@
   let view = 'review';
 
   const prIcon = '<svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor"><path d="M1.5 3.25a2.25 2.25 0 1 1 3 2.122v5.256a2.251 2.251 0 1 1-1.5 0V5.372A2.25 2.25 0 0 1 1.5 3.25Zm5.677-.177L9.573.677A.25.25 0 0 1 10 .854V2.5h1A2.5 2.5 0 0 1 13.5 5v5.628a2.251 2.251 0 1 1-1.5 0V5a1 1 0 0 0-1-1h-1v1.646a.25.25 0 0 1-.427.177L7.177 3.427a.25.25 0 0 1 0-.354ZM3.75 2.5a.75.75 0 1 0 0 1.5.75.75 0 0 0 0-1.5Zm0 9.5a.75.75 0 1 0 0 1.5.75.75 0 0 0 0-1.5Zm8.25.75a.75.75 0 1 0 1.5 0 .75.75 0 0 0-1.5 0Z"/></svg>';
+  const draftIcon = '<svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor"><path d="M3.25 1A2.25 2.25 0 0 1 4 5.372v5.256a2.251 2.251 0 1 1-1.5 0V5.372A2.251 2.251 0 0 1 3.25 1Zm9.5 14a2.25 2.25 0 1 1 0-4.5 2.25 2.25 0 0 1 0 4.5ZM2.5 3.25a.75.75 0 1 0 1.5 0 .75.75 0 0 0-1.5 0ZM3.25 12a.75.75 0 1 0 0 1.5.75.75 0 0 0 0-1.5Zm9.5 0a.75.75 0 1 0 0 1.5.75.75 0 0 0 0-1.5ZM14 7.5a1.25 1.25 0 1 1-2.5 0 1.25 1.25 0 0 1 2.5 0Zm0-4.25a1.25 1.25 0 1 1-2.5 0 1.25 1.25 0 0 1 2.5 0Z"/></svg>';
   const mergedIcon = '<svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor"><path d="M5.45 5.154A4.25 4.25 0 0 0 9.25 7.5h1.378a2.251 2.251 0 1 1 0 1.5H9.25A5.734 5.734 0 0 1 5 7.123v3.505a2.25 2.25 0 1 1-1.5 0V5.372a2.25 2.25 0 1 1 1.95-.218ZM4.25 13.5a.75.75 0 1 0 0-1.5.75.75 0 0 0 0 1.5Zm8.5-4.5a.75.75 0 1 0 0-1.5.75.75 0 0 0 0 1.5ZM5 3.25a.75.75 0 1 0-1.5 0 .75.75 0 0 0 1.5 0Z"/></svg>';
   const commentIcon = '<svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor"><path d="M1 2.75C1 1.784 1.784 1 2.75 1h10.5c.966 0 1.75.784 1.75 1.75v7.5A1.75 1.75 0 0 1 13.25 12H9.06l-2.573 2.573A1.458 1.458 0 0 1 4 13.543V12H2.75A1.75 1.75 0 0 1 1 10.25Zm1.75-.25a.25.25 0 0 0-.25.25v7.5c0 .138.112.25.25.25h2a.75.75 0 0 1 .75.75v2.19l2.72-2.72a.749.749 0 0 1 .53-.22h4.5a.25.25 0 0 0 .25-.25v-7.5a.25.25 0 0 0-.25-.25Z"/></svg>';
 
@@ -550,8 +554,10 @@
     const passing = r.checks[0] === r.checks[1];
     const mark = r.pending ? '' : passing ? '<span class="pass">✓</span>' : '<span class="fail">✗</span>';
     const bg = !settings.rowColors ? 'transparent' : r.state ? DONE : r.bg || 'transparent';
-    return `<li style="background:${bg}"${tk.key ? ` data-prb-ticket="${tk.key}"` : ''}>
-      <div class="pr-icon ${r.state || ''}">${r.state === 'merged' ? mergedIcon : prIcon}</div>
+    const draft = r.draft && !r.state;
+    const icon = r.state === 'merged' ? mergedIcon : draft ? draftIcon : prIcon;
+    return `<li style="background-color:${bg}"${draft && settings.rowColors ? ' class="prb-draft"' : ''}${tk.key ? ` data-prb-ticket="${tk.key}"` : ''}>
+      <div class="pr-icon ${r.state || (draft ? 'draft' : '')}">${icon}</div>
       <div>
         <div class="title-line"><span class="prb-group">${pills}</span>${tk.pill || ''}${r.title}</div>
         <div class="meta">${r.repo} · ${tk.meta || ''}${authorHtml(r.author)} opened ${r.opened} · ${r.review} · ${mark} <span class="ratio">${r.checks[0]}/${r.checks[1]}</span></div>
@@ -637,6 +643,7 @@
         [swatch(ORANGE), 'Not approved, 2 weeks to 1 month old'],
         [swatch(RED), 'Not approved, over 1 month old'],
         [swatch(DONE), 'Merged or closed'],
+        ['<span class="prb-legend-swatch prb-draft"></span>', 'Draft, striped over its age or approval color'],
       ]) +
       section('Badges', [
         [badge('ready'), 'Approved, checks passing, and up to date'],
@@ -664,6 +671,14 @@
   }
 
   const list = document.getElementById('rows');
+  // Each draft row's stripes are shifted by its place in the list, so they run unbroken across neighboring drafts.
+  function alignDraftStripes() {
+    list.querySelectorAll('li.prb-draft').forEach((row) => {
+      row.style.backgroundPosition = `0 ${list.getBoundingClientRect().top - row.getBoundingClientRect().top}px`;
+    });
+  }
+  new ResizeObserver(alignDraftStripes).observe(list);
+  new MutationObserver(alignDraftStripes).observe(list, { childList: true });
   const legend = document.getElementById('legend');
   legend.innerHTML = renderLegend();
 

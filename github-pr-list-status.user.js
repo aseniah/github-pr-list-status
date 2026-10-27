@@ -2,7 +2,7 @@
 // @name        GitHub PR List Status
 // @namespace   https://github.com/aseniah
 // @description Colors PRs by age and approval, and adds merge state and line count badges to the pull requests list
-// @version     1.7
+// @version     1.7.1
 // @license     MIT
 // @updateURL   https://raw.githubusercontent.com/aseniah/github-pr-list-status/main/github-pr-list-status.user.js
 // @downloadURL https://raw.githubusercontent.com/aseniah/github-pr-list-status/main/github-pr-list-status.user.js
@@ -308,10 +308,10 @@
     "M6.78 1.97a.75.75 0 0 1 0 1.06L3.81 6h6.44A4.75 4.75 0 0 1 15 10.75v2.5a.75.75 0 0 1-1.5 0v-2.5a3.25 3.25 0 0 0-3.25-3.25H3.81l2.97 2.97a.749.749 0 0 1-.326 1.275.749.749 0 0 1-.734-.215L.47 7.28a.75.75 0 0 1 0-1.06l4.25-4.25a.75.75 0 0 1 1.06 0Z";
 
   const BADGE_CSS = `
-    :root { --prb-row-yellow: #fff8c5; --prb-row-orange: #ffd8b1; --prb-row-red: #ffd0d0; --prb-row-green: #c8f5c8; --prb-hl-solid: #6e7781; --prb-tg-0: #0969da; --prb-tg-1: #8250df; --prb-tg-2: #bf3989; --prb-tg-3: #1b7c83; --prb-tg-4: #bc4c00; --prb-tg-5: #6e7781; }
-    [data-color-mode="dark"] { --prb-row-yellow: #2f2a05; --prb-row-orange: #3d1f0d; --prb-row-red: #3c0614; --prb-row-green: #122117; --prb-hl-solid: #6e7681; --prb-tg-0: #4493f8; --prb-tg-1: #ab7df8; --prb-tg-2: #db61a2; --prb-tg-3: #39c5cf; --prb-tg-4: #db6d28; --prb-tg-5: #9198a1; }
+    :root { --prb-row-yellow: #fff8c5; --prb-row-orange: #ffd8b1; --prb-row-red: #ffd0d0; --prb-row-green: #c8f5c8; --prb-hl-solid: #6e7781; --prb-tg-0: #0969da; --prb-tg-1: #8250df; --prb-tg-2: #bf3989; --prb-tg-3: #1b7c83; --prb-tg-4: #bc4c00; --prb-tg-5: #6e7781; --prb-draft-stripe: rgba(31, 35, 40, 0.05); }
+    [data-color-mode="dark"] { --prb-row-yellow: #2f2a05; --prb-row-orange: #3d1f0d; --prb-row-red: #3c0614; --prb-row-green: #122117; --prb-hl-solid: #6e7681; --prb-tg-0: #4493f8; --prb-tg-1: #ab7df8; --prb-tg-2: #db61a2; --prb-tg-3: #39c5cf; --prb-tg-4: #db6d28; --prb-tg-5: #9198a1; --prb-draft-stripe: rgba(240, 246, 252, 0.05); }
     @media (prefers-color-scheme: dark) {
-      [data-color-mode="auto"] { --prb-row-yellow: #2f2a05; --prb-row-orange: #3d1f0d; --prb-row-red: #3c0614; --prb-row-green: #122117; --prb-hl-solid: #6e7681; --prb-tg-0: #4493f8; --prb-tg-1: #ab7df8; --prb-tg-2: #db61a2; --prb-tg-3: #39c5cf; --prb-tg-4: #db6d28; --prb-tg-5: #9198a1; }
+      [data-color-mode="auto"] { --prb-row-yellow: #2f2a05; --prb-row-orange: #3d1f0d; --prb-row-red: #3c0614; --prb-row-green: #122117; --prb-hl-solid: #6e7681; --prb-tg-0: #4493f8; --prb-tg-1: #ab7df8; --prb-tg-2: #db61a2; --prb-tg-3: #39c5cf; --prb-tg-4: #db6d28; --prb-tg-5: #9198a1; --prb-draft-stripe: rgba(240, 246, 252, 0.05); }
     }
     .prb-group { float: right; display: inline-flex; gap: 6px; margin: 2px 16px 0 12px; }
     .prb { display: inline-flex; align-items: center; gap: 4px; font-size: 12px; font-weight: 500; line-height: 18px; padding: 0 7px; border-radius: 2em; border: 1px solid transparent; white-space: nowrap; }
@@ -386,6 +386,8 @@
     .prb-ticket:hover { text-decoration: underline; }
     .prb-ticket.prb-ticket-single { --prb-tg: var(--fgColor-muted, #59636e); background: var(--bgColor-default, #fff); }
     .prb-legend .prb-ticket { margin-right: 0; }
+    /* A 45° tile holds two stripe periods of 6px stripes and 10px gaps, so its side is 16px × √2. */
+    .prb-draft { background-image: linear-gradient(45deg, var(--prb-draft-stripe) 0 18.75%, transparent 18.75% 50%, var(--prb-draft-stripe) 50% 68.75%, transparent 68.75% 100%); background-size: 22.627px 22.627px; background-origin: border-box; }
     .prb-tg-dim > li { transition: opacity 0.12s; }
     .prb-tg-dim > li:not(.prb-tg-hot) { opacity: 0.4; }
     .prb-tg-arrow { position: fixed; left: 50%; z-index: 100; display: inline-flex; align-items: center; padding: 4px 12px; border: 1px solid var(--prb-tg); border-radius: 2em; background: var(--bgColor-default, #fff); color: var(--prb-tg); font: inherit; font-size: 12px; font-weight: 600; box-shadow: 0 4px 12px rgba(37, 41, 46, 0.18); pointer-events: none; animation: prb-tg-bounce 1.2s ease-in-out infinite; }
@@ -447,9 +449,18 @@
     );
   }
 
+  function isDraft(row) {
+    return !!row
+      .querySelector("svg")
+      ?.classList.contains("octicon-git-pull-request-draft");
+  }
+
   function applyHighlight(row, timeEl) {
     const datetime = timeEl.getAttribute("datetime");
     if (!datetime) return;
+    const draft = isOn("rowColors") && isDraft(row);
+    if (row.classList.contains("prb-draft") !== draft)
+      row.classList.toggle("prb-draft", draft);
     if (!isOn("rowColors")) {
       row.style.backgroundColor = "";
       return;
@@ -1096,6 +1107,8 @@
       el.style.background = color;
       return el;
     };
+    const draftSwatch = () =>
+      element("span", { className: "prb-legend-swatch prb-draft" });
     const reviewCount = (className, icon) => {
       const counts = document.createElement("span");
       counts.className = "prb-review-counts";
@@ -1127,6 +1140,7 @@
         `Not approved, ${ageRangeLabel(CONFIG.ageColors[i - 1]?.days, t.days)} old`,
       ]),
       [swatch(CONFIG.doneColor), "Merged or closed"],
+      [draftSwatch(), "Draft, striped over its age or approval color"],
     ];
     const ticketSample = (className) =>
       element("span", { className, textContent: "ABC-123" });
@@ -3545,10 +3559,34 @@
       addBadges(row);
     });
     applyTicketKeys(rows);
+    watchDraftStripes(rows[0]?.parentElement);
     addFooter();
     // Runs on every change GitHub makes, so the author list rebuilds only when the page's authors change.
     if (renderedAuthors !== authorSignature(rows)) renderPanel();
     updateCelebration();
+  }
+
+  // Each draft row's stripes are shifted by its place in the list, so they run unbroken across
+  // neighboring drafts. A row above growing, such as when its badges wrap the title, resizes the list.
+  let stripeList = null;
+  const stripeObserver = new ResizeObserver(alignDraftStripes);
+  function watchDraftStripes(list) {
+    if (list !== stripeList) {
+      if (stripeList) stripeObserver.unobserve(stripeList);
+      stripeList = list;
+      if (list) stripeObserver.observe(list);
+    }
+    alignDraftStripes();
+  }
+  function alignDraftStripes() {
+    document.querySelectorAll("li.prb-draft").forEach((row) => {
+      const y =
+        row.parentElement.getBoundingClientRect().top -
+        row.getBoundingClientRect().top;
+      if (row.prbStripeY === y) return;
+      row.prbStripeY = y;
+      row.style.backgroundPosition = `0 ${y}px`;
+    });
   }
 
   let highlightQueued = false;

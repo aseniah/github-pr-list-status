@@ -1,5 +1,11 @@
 # Release Notes
 
+## 1.7.2
+
+### Fixes
+
+- **Steadier start in Safari.** With the Userscripts extension, the script sometimes didn't run after a page refresh. It now runs on every load.
+
 ## 1.7.1
 
 ### Features
